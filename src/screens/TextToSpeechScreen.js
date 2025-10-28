@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, IMAGES } from '../constants';
-import { Button, Input, DashboardLayout } from '../components';
+import { Button, Input, DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
 
 const TextToSpeechScreen = ({ navigation, route }) => {
   const selectedAvatar = route?.params?.selectedAvatar || {
@@ -19,8 +19,8 @@ const TextToSpeechScreen = ({ navigation, route }) => {
 
   const [outputName, setOutputName] = useState('');
   const [textInput, setTextInput] = useState('');
-  const [selectedVoice, setSelectedVoice] = useState('Aura - Female');
-  const [selectedLanguage, setSelectedLanguage] = useState('English (US)');
+  const [selectedVoice, setSelectedVoice] = useState('nova');
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handleModeChange = (mode) => {
@@ -32,7 +32,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
   };
 
   const handleAvatarSelect = () => {
-    navigation.navigate('SelectAvatar');
+    navigation.navigate('SelectAvatar', { returnScreen: 'Dashboard' });
   };
 
   const handleCreate = () => {
@@ -128,18 +128,19 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           <View style={styles.selectionRow}>
             <View style={styles.selectionItem}>
               <Text style={styles.selectionLabel}>Voice Selection</Text>
-              <TouchableOpacity style={styles.selectionButton}>
-                <Text style={styles.selectionButtonText}>{selectedVoice}</Text>
-                <Ionicons name="chevron-expand" size={20} color="rgba(255,255,255,0.6)" />
-              </TouchableOpacity>
+              <VoiceSelector
+                selectedVoice={selectedVoice}
+                onVoiceChange={setSelectedVoice}
+              />
             </View>
 
             <View style={styles.selectionItem}>
               <Text style={styles.selectionLabel}>Language</Text>
-              <TouchableOpacity style={styles.selectionButton}>
-                <Text style={styles.selectionButtonText}>{selectedLanguage}</Text>
-                <Ionicons name="chevron-expand" size={20} color="rgba(255,255,255,0.6)" />
-              </TouchableOpacity>
+              <LanguageSelector
+                selectedLanguage={selectedLanguage}
+                onLanguageChange={setSelectedLanguage}
+                showFlag={false}
+              />
             </View>
           </View>
         </View>

@@ -11,6 +11,12 @@ const videoList = [
 ];
 
 const PastVideosListScreen = ({ navigation }) => {
+  const [videoItems, setVideoItems] = React.useState(videoList);
+
+  const handleDelete = (id) => {
+    setVideoItems(prev => prev.filter(item => item.id !== id));
+  };
+
   return (
     <View style={styles.container}>
       <Header
@@ -25,7 +31,7 @@ const PastVideosListScreen = ({ navigation }) => {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {videoList.map(item => (
+        {videoItems.map(item => (
           <View key={item.id} style={styles.videoCard}>
             <View style={styles.cardHeader}>
               <View style={styles.videoInfo}>
@@ -48,6 +54,13 @@ const PastVideosListScreen = ({ navigation }) => {
                 style={styles.actionBtn}
                 icon={<Ionicons name="create" size={20} color={COLORS.textLight} />}
               />
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => handleDelete(item.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={20} color="#ef4444" />
+              </TouchableOpacity>
             </View>
           </View>
         ))}
@@ -68,8 +81,18 @@ const styles = StyleSheet.create({
   videoTitle: { fontSize: SIZES.body1, fontWeight: 'bold', color: COLORS.textLight },
   videoDate: { fontSize: SIZES.body3, color: COLORS.gray[400], marginTop: 4 },
   thumbnail: { flex: 1, aspectRatio: 16/9, backgroundColor: COLORS.gray[700], borderRadius: 8 },
-  cardActions: { flexDirection: 'row', gap: 12 },
+  cardActions: { flexDirection: 'row', gap: 8 },
   actionBtn: { flex: 1 },
+  deleteButton: {
+    width: 48,
+    height: 48,
+    borderRadius: SIZES.radius,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default PastVideosListScreen;

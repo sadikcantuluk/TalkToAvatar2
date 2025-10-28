@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../constants';
-import { Button } from '../components';
+import { Button, LanguageSelector } from '../components';
 
 const { width } = Dimensions.get('window');
 
@@ -29,6 +29,7 @@ const languages = [
 const modes = [
   {
     id: 1,
+    route: 'Dashboard',
     icon: 'mic',
     title: 'TTS Avatar',
     description: 'Type any text and have a realistic avatar speak it aloud for you.',
@@ -36,6 +37,7 @@ const modes = [
   },
   {
     id: 2,
+    route: 'TravelAssistant',
     icon: 'navigate',
     title: 'AI Travel Assistant',
     description: 'Get real-time travel help and translations from your avatar companion.',
@@ -43,6 +45,7 @@ const modes = [
   },
   {
     id: 3,
+    route: 'AvatarToVideo',
     icon: 'videocam',
     title: 'Avatar to Video',
     description: 'Create engaging animated videos simply by recording your voice.',
@@ -53,8 +56,7 @@ const modes = [
 const WelcomeScreen = ({ navigation }) => {
   const scrollViewRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [languageModalVisible, setLanguageModalVisible] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState(languages[0]);
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
 
   const handleScroll = (event) => {
     const contentOffsetX = event.nativeEvent.contentOffset.x;
@@ -70,9 +72,8 @@ const WelcomeScreen = ({ navigation }) => {
     navigation.navigate('Dashboard');
   };
 
-  const handleLanguageSelect = (language) => {
-    setSelectedLanguage(language);
-    setLanguageModalVisible(false);
+  const handleLanguageChange = (languageCode) => {
+    setSelectedLanguage(languageCode);
   };
 
   return (
@@ -80,52 +81,11 @@ const WelcomeScreen = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>TALKTOAVATAR</Text>
-        <TouchableOpacity 
-          style={styles.languageButton}
-          onPress={() => setLanguageModalVisible(true)}
-        >
-          <Text style={styles.languageFlag}>{selectedLanguage.flag}</Text>
-          <Text style={styles.languageText}>{selectedLanguage.code.toUpperCase()}</Text>
-        </TouchableOpacity>
+        <LanguageSelector
+          selectedLanguage={selectedLanguage}
+          onLanguageChange={handleLanguageChange}
+        />
       </View>
-
-      {/* Language Selection Modal */}
-      <Modal
-        visible={languageModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setLanguageModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Language</Text>
-              <TouchableOpacity onPress={() => setLanguageModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textLight} />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={languages}
-              keyExtractor={(item) => item.code}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.languageItem,
-                    selectedLanguage.code === item.code && styles.languageItemSelected,
-                  ]}
-                  onPress={() => handleLanguageSelect(item)}
-                >
-                  <Text style={styles.languageItemFlag}>{item.flag}</Text>
-                  <Text style={styles.languageItemText}>{item.name}</Text>
-                  {selectedLanguage.code === item.code && (
-                    <Ionicons name="checkmark" size={24} color={COLORS.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </View>
-      </Modal>
 
       {/* Spacer */}
       <View style={{ height: 20 }} />
@@ -152,7 +112,7 @@ const WelcomeScreen = ({ navigation }) => {
               </View>
               <Button
                 title={mode.buttonText}
-                onPress={handleGetStarted}
+                onPress={() => navigation.navigate(mode.route)}
                 variant="primary"
                 style={styles.cardButton}
               />
@@ -294,51 +254,6 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     paddingVertical: 12,
-  },
-  languageFlag: {
-    fontSize: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.backgroundDark,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 32,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[800],
-  },
-  modalTitle: {
-    fontSize: SIZES.h3,
-    fontWeight: 'bold',
-    color: COLORS.textLight,
-  },
-  languageItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 16,
-  },
-  languageItemSelected: {
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
-  },
-  languageItemFlag: {
-    fontSize: 28,
-  },
-  languageItemText: {
-    flex: 1,
-    fontSize: SIZES.body1,
-    color: COLORS.textLight,
   },
 });
 

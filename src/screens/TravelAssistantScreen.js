@@ -8,13 +8,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../constants';
-import { Button, DashboardLayout } from '../components';
+import { Button, DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
 
 const TravelAssistantScreen = ({ navigation }) => {
   const [userText, setUserText] = useState('');
   const [counterpartText, setCounterpartText] = useState('');
-  const [userLanguage, setUserLanguage] = useState('English');
-  const [counterpartLanguage, setCounterpartLanguage] = useState('Español');
+  const [userLanguage, setUserLanguage] = useState('en');
+  const [counterpartLanguage, setCounterpartLanguage] = useState('es');
+  const [userVoice, setUserVoice] = useState('nova');
+  const [counterpartVoice, setCounterpartVoice] = useState('onyx');
 
   const handleModeChange = (mode) => {
     if (mode === 'tts') {
@@ -36,13 +38,16 @@ const TravelAssistantScreen = ({ navigation }) => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>You</Text>
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.languageButton}>
-                <Ionicons name="language" size={16} color={COLORS.gray[400]} />
-                <Text style={styles.languageText}>{userLanguage}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Ionicons name="close" size={20} color={COLORS.gray[400]} />
-              </TouchableOpacity>
+              <VoiceSelector
+                selectedVoice={userVoice}
+                onVoiceChange={setUserVoice}
+                style={styles.voiceSelector}
+              />
+              <LanguageSelector
+                selectedLanguage={userLanguage}
+                onLanguageChange={setUserLanguage}
+                style={styles.languageSelector}
+              />
             </View>
           </View>
 
@@ -76,18 +81,21 @@ const TravelAssistantScreen = ({ navigation }) => {
         {/* Divider */}
         <View style={styles.divider} />
 
-        {/* Counterpart Section */}
+        {/* Other Person Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Counterpart</Text>
+            <Text style={styles.sectionTitle}>Other</Text>
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.languageButton}>
-                <Ionicons name="language" size={16} color={COLORS.gray[400]} />
-                <Text style={styles.languageText}>{counterpartLanguage}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Ionicons name="close" size={20} color={COLORS.gray[400]} />
-              </TouchableOpacity>
+              <VoiceSelector
+                selectedVoice={counterpartVoice}
+                onVoiceChange={setCounterpartVoice}
+                style={styles.voiceSelector}
+              />
+              <LanguageSelector
+                selectedLanguage={counterpartLanguage}
+                onLanguageChange={setCounterpartLanguage}
+                style={styles.languageSelector}
+              />
             </View>
           </View>
 
@@ -144,21 +152,13 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-  },
-  languageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: COLORS.gray[800],
-    borderRadius: 8,
   },
-  languageText: {
-    fontSize: SIZES.body3,
-    fontWeight: '500',
-    color: COLORS.textLight,
+  voiceSelector: {
+    minWidth: 130,
+  },
+  languageSelector: {
+    minWidth: 130,
   },
   textAreaWrapper: {
     flex: 1,

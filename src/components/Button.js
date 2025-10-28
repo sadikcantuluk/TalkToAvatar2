@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray[800],
   },
   text_outline: {
-    color: COLORS.gray[800],
+    color: COLORS.textLight,
   },
   text_ghost: {
     color: COLORS.gray[500],

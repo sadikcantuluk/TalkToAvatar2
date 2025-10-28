@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, IMAGES } from '../constants';
-import { Button, DashboardLayout } from '../components';
+import { Button, DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
 
 const AvatarToVideoScreen = ({ navigation, route }) => {
   const selectedAvatar = route?.params?.selectedAvatar || {
@@ -20,20 +20,19 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
   };
 
   const [scriptText, setScriptText] = useState('');
-  const [selectedVoice, setSelectedVoice] = useState('Aria - Female');
-  const [selectedLanguage, setSelectedLanguage] = useState('English (US)');
+  const [selectedVoice, setSelectedVoice] = useState('nova');
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
 
   const handleModeChange = (mode) => {
     if (mode === 'tts') {
       navigation.navigate('Dashboard');
     } else if (mode === 'travel') {
-      // Navigate to travel assistant when implemented
-      console.log('Travel Assistant coming soon');
+      navigation.navigate('TravelAssistant');
     }
   };
 
   const handleAvatarSelect = () => {
-    navigation.navigate('SelectAvatar');
+    navigation.navigate('SelectAvatar', { returnScreen: 'AvatarToVideo' });
   };
 
   const handleCreateVideo = () => {
@@ -113,21 +112,23 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
         {/* Voice & Language Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Customize Voice & Language</Text>
+          <View style={styles.spacer} />
           <View style={styles.customizeRow}>
             <View style={styles.selectContainer}>
               <Text style={styles.selectLabel}>Voice</Text>
-              <TouchableOpacity style={styles.selectButton}>
-                <Text style={styles.selectButtonText}>{selectedVoice}</Text>
-                <Ionicons name="chevron-down" size={20} color={COLORS.gray[400]} />
-              </TouchableOpacity>
+              <VoiceSelector
+                selectedVoice={selectedVoice}
+                onVoiceChange={setSelectedVoice}
+              />
             </View>
 
             <View style={styles.selectContainer}>
               <Text style={styles.selectLabel}>Language</Text>
-              <TouchableOpacity style={styles.selectButton}>
-                <Text style={styles.selectButtonText}>{selectedLanguage}</Text>
-                <Ionicons name="chevron-down" size={20} color={COLORS.gray[400]} />
-              </TouchableOpacity>
+              <LanguageSelector
+                selectedLanguage={selectedLanguage}
+                onLanguageChange={setSelectedLanguage}
+                showFlag={false}
+              />
             </View>
           </View>
         </View>
@@ -162,6 +163,9 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+  },
+  spacer: {
+    height: 12,
   },
   sectionHeader: {
     flexDirection: 'row',

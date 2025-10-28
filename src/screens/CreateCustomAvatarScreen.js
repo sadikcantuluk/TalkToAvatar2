@@ -10,8 +10,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import { COLORS, SIZES } from '../constants';
 import { Header, Button, Input } from '../components';
+import { generateAvatarFromImage } from '../services/googleAI';
 
 const CreateCustomAvatarScreen = ({ navigation }) => {
   const [step, setStep] = useState('create'); // 'create', 'loading', 'confirmation'
@@ -46,27 +49,93 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       return;
     }
 
-    // Show loading
-    setStep('loading');
+    try {
+      // Show loading
+      setStep('loading');
 
-    // Simulate avatar creation with Gemini API
-    // In real implementation, call Gemini API here
-    setTimeout(() => {
-      setGeneratedAvatar(selectedImage); // For now, use the same image
-      setStep('confirmation');
-    }, 3000);
+      // Convert image to base64
+      const base64 = await FileSystem.readAsStringAsync(selectedImage, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Call Google AI API to generate avatar
+      const result = await generateAvatarFromImage(base64);
+
+      if (result.success) {
+        // Check if we have a generated image or using fallback
+        if (result.generatedImages && result.generatedImages.length > 0 && 
+            result.generatedImages[0].image.imageBytes) {
+          // Use the AI-generated image
+          const generatedImageBase64 = result.generatedImages[0].image.imageBytes;
+          setGeneratedAvatar(`data:image/jpeg;base64,${generatedImageBase64}`);
+        } else if (result.fallback) {
+          // Fallback: Use the original image
+          console.log('Using original image as fallback');
+          setGeneratedAvatar(selectedImage);
+        } else {
+          // No image available
+          throw new Error('No image returned from API');
+        }
+        setStep('confirmation');
+      } else {
+        throw new Error('Failed to generate avatar');
+      }
+    } catch (error) {
+      console.error('Avatar creation error:', error);
+      alert('Failed to create avatar. Please try again.');
+      setStep('create');
+    }
   };
 
-  const handleAccept = () => {
-    // Navigate back to Select Avatar with the new custom avatar
-    navigation.navigate('SelectAvatar', {
-      customAvatar: {
-        id: 'custom_' + Date.now(),
+  const handleAccept = async () => {
+    try {
+      // Request media library permissions
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Permission to access media library is required!');
+        return;
+      }
+
+      let savedImageUri = generatedAvatar;
+
+      // If the image is base64, save it to gallery first
+      if (generatedAvatar.startsWith('data:image')) {
+        // Create a file from base64
+        const filename = `avatar_${avatarName}_${Date.now()}.jpg`;
+        const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        
+        // Extract base64 data
+        const base64Data = generatedAvatar.split(',')[1];
+        
+        // Write to file
+        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        // Save to media library
+        const asset = await MediaLibrary.createAssetAsync(fileUri);
+        savedImageUri = asset.uri;
+        
+        // Clean up temp file
+        await FileSystem.deleteAsync(fileUri, { idempotent: true });
+      }
+
+      // Navigate back to Select Avatar with the new custom avatar
+      const customAvatar = {
+        id: `custom_${avatarName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: avatarName,
         description: 'Custom avatar',
-        image: { uri: generatedAvatar },
-      },
-    });
+        image: { uri: savedImageUri },
+      };
+      
+      console.log('Navigating to SelectAvatar with:', customAvatar);
+      navigation.navigate('SelectAvatar', {
+        customAvatar: customAvatar,
+      });
+    } catch (error) {
+      console.error('Error saving avatar:', error);
+      alert('Failed to save avatar. Please try again.');
+    }
   };
 
   const handleRecreate = () => {

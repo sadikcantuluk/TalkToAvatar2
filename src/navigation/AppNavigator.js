@@ -25,6 +25,9 @@ const AppNavigator = () => {
           headerShown: false,
           animation: 'slide_from_right',
           contentStyle: { backgroundColor: '#101922' },
+          animationDuration: 300,
+          gestureEnabled: true,
+          gestureDirection: 'horizontal',
         }}
       >
         <Stack.Screen name="Splash" component={SplashScreen} />
