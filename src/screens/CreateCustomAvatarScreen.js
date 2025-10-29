@@ -50,23 +50,33 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
     }
 
     try {
+      console.log('=== Creating Custom Avatar ===');
+      console.log('Avatar Name:', avatarName);
+      console.log('Selected Image URI:', selectedImage);
+      
       // Show loading
       setStep('loading');
 
       // Convert image to base64
+      console.log('Reading image as base64...');
       const base64 = await FileSystem.readAsStringAsync(selectedImage, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      console.log('Base64 length:', base64.length);
 
       // Call Google AI API to generate avatar
+      console.log('Calling Google AI API...');
       const result = await generateAvatarFromImage(base64);
+      console.log('API result success:', result.success);
 
       if (result.success) {
         // Check if we have a generated image or using fallback
         if (result.generatedImages && result.generatedImages.length > 0 && 
             result.generatedImages[0].image.imageBytes) {
           // Use the AI-generated image
+          console.log('Using AI-generated image');
           const generatedImageBase64 = result.generatedImages[0].image.imageBytes;
+          console.log('Generated image base64 length:', generatedImageBase64.length);
           setGeneratedAvatar(`data:image/jpeg;base64,${generatedImageBase64}`);
         } else if (result.fallback) {
           // Fallback: Use the original image
@@ -74,14 +84,18 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
           setGeneratedAvatar(selectedImage);
         } else {
           // No image available
+          console.error('No image returned from API');
           throw new Error('No image returned from API');
         }
+        console.log('Moving to confirmation step');
         setStep('confirmation');
       } else {
+        console.error('API returned failure:', result.error);
         throw new Error('Failed to generate avatar');
       }
     } catch (error) {
       console.error('Avatar creation error:', error);
+      console.error('Error stack:', error.stack);
       alert('Failed to create avatar. Please try again.');
       setStep('create');
     }
@@ -89,9 +103,14 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
 
   const handleAccept = async () => {
     try {
+      console.log('=== Accepting Custom Avatar ===');
+      console.log('Avatar Name:', avatarName);
+      console.log('Generated Avatar Type:', generatedAvatar.startsWith('data:image') ? 'base64' : 'file');
+      
       // Request media library permissions
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
+        console.log('Media library permission denied');
         alert('Permission to access media library is required!');
         return;
       }
@@ -100,40 +119,50 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
 
       // If the image is base64, save it to gallery first
       if (generatedAvatar.startsWith('data:image')) {
+        console.log('Saving base64 image to file system...');
+        
         // Create a file from base64
-        const filename = `avatar_${avatarName}_${Date.now()}.jpg`;
+        const filename = `avatar_${avatarName.replace(/\s+/g, '_')}_${Date.now()}.jpg`;
         const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        console.log('File URI:', fileUri);
         
         // Extract base64 data
         const base64Data = generatedAvatar.split(',')[1];
+        console.log('Base64 data length:', base64Data.length);
         
         // Write to file
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: FileSystem.EncodingType.Base64,
         });
+        console.log('File written successfully');
         
         // Save to media library
         const asset = await MediaLibrary.createAssetAsync(fileUri);
         savedImageUri = asset.uri;
+        console.log('Saved to media library:', savedImageUri);
         
         // Clean up temp file
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
+        console.log('Temp file cleaned up');
       }
 
-      // Navigate back to Select Avatar with the new custom avatar
-      const customAvatar = {
-        id: `custom_${avatarName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const newAvatar = {
+        id: 'custom_' + Date.now(),
         name: avatarName,
         description: 'Custom avatar',
         image: { uri: savedImageUri },
       };
       
-      console.log('Navigating to SelectAvatar with:', customAvatar);
+      console.log('New Avatar Object:', JSON.stringify(newAvatar));
+      console.log('Navigating to SelectAvatar...');
+
+      // Navigate back to Select Avatar with the new custom avatar
       navigation.navigate('SelectAvatar', {
-        customAvatar: customAvatar,
+        customAvatar: newAvatar,
       });
     } catch (error) {
       console.error('Error saving avatar:', error);
+      console.error('Error stack:', error.stack);
       alert('Failed to save avatar. Please try again.');
     }
   };

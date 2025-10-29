@@ -44,12 +44,21 @@ const SelectAvatarScreen = ({ navigation, route }) => {
 
   const loadCustomAvatars = async () => {
     try {
+      console.log('=== Loading Custom Avatars ===');
       const savedAvatars = await AsyncStorage.getItem(CUSTOM_AVATARS_KEY);
       if (savedAvatars) {
-        setCustomAvatars(JSON.parse(savedAvatars));
+        const parsedAvatars = JSON.parse(savedAvatars);
+        console.log('Loaded custom avatars:', parsedAvatars.length);
+        console.log('Avatar details:', parsedAvatars.map(a => ({ id: a.id, name: a.name })));
+        setCustomAvatars(parsedAvatars);
+      } else {
+        console.log('No custom avatars found in storage');
+        setCustomAvatars([]);
       }
     } catch (error) {
       console.error('Error loading custom avatars:', error);
+      console.error('Error stack:', error.stack);
+      setCustomAvatars([]);
     } finally {
       setIsLoading(false);
     }
@@ -57,33 +66,70 @@ const SelectAvatarScreen = ({ navigation, route }) => {
 
   const saveCustomAvatars = async (avatars) => {
     try {
+      console.log('=== Saving Custom Avatars ===');
+      console.log('Number of avatars to save:', avatars.length);
+      console.log('Avatar details:', avatars.map(a => ({ id: a.id, name: a.name })));
       await AsyncStorage.setItem(CUSTOM_AVATARS_KEY, JSON.stringify(avatars));
+      console.log('Avatars saved successfully to AsyncStorage');
     } catch (error) {
       console.error('Error saving custom avatars:', error);
+      console.error('Error stack:', error.stack);
     }
   };
 
   // Check for new custom avatar whenever screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      if (route.params?.customAvatar) {
-        const newAvatar = route.params.customAvatar;
-        console.log('New custom avatar received:', newAvatar);
+      const handleFocus = async () => {
+        console.log('=== SelectAvatarScreen Focus ===');
+        console.log('Route params:', route.params);
         
-        // Force immediate update
-        setCustomAvatars(prevAvatars => {
-          console.log('Current avatars count:', prevAvatars.length);
-          const updatedAvatars = [...prevAvatars, newAvatar];
-          console.log('Updated avatars count:', updatedAvatars.length);
-          saveCustomAvatars(updatedAvatars);
-          setSelectedAvatar(newAvatar.id);
-          return updatedAvatars;
-        });
+        // Reload custom avatars from storage to ensure we have the latest data
+        await loadCustomAvatars();
         
-        // Clear the param to prevent re-adding on next focus
-        navigation.setParams({ customAvatar: undefined });
-      }
-    }, [route.params?.customAvatar, navigation])
+        if (route.params?.customAvatar) {
+          const newAvatar = route.params.customAvatar;
+          console.log('New custom avatar received:', newAvatar.id, newAvatar.name);
+          
+          try {
+            // Load current avatars from storage
+            const savedAvatars = await AsyncStorage.getItem(CUSTOM_AVATARS_KEY);
+            let currentAvatars = savedAvatars ? JSON.parse(savedAvatars) : [];
+            console.log('Current avatars in storage:', currentAvatars.length);
+            
+            // Check if this avatar already exists (avoid duplicates)
+            const exists = currentAvatars.some(a => a.id === newAvatar.id);
+            console.log('Avatar already exists:', exists);
+            
+            if (!exists) {
+              // Add new avatar to the list
+              const updatedAvatars = [...currentAvatars, newAvatar];
+              console.log('Adding new avatar. Total avatars:', updatedAvatars.length);
+              
+              // Save to storage
+              await saveCustomAvatars(updatedAvatars);
+              
+              // Update state
+              setCustomAvatars(updatedAvatars);
+              setSelectedAvatar(newAvatar.id);
+              
+              console.log('Avatar added successfully');
+            } else {
+              // Avatar exists, just select it
+              setSelectedAvatar(newAvatar.id);
+              console.log('Avatar already exists, just selecting it');
+            }
+          } catch (error) {
+            console.error('Error handling new custom avatar:', error);
+          }
+          
+          // Clear the param to prevent re-adding on next focus
+          navigation.setParams({ customAvatar: undefined });
+        }
+      };
+      
+      handleFocus();
+    }, [route.params?.customAvatar])
   );
 
   const allAvatars = [...defaultAvatars, ...customAvatars];
@@ -105,10 +151,18 @@ const SelectAvatarScreen = ({ navigation, route }) => {
   };
 
   const handleDeleteAvatar = (avatarId) => {
+    console.log('=== Deleting Custom Avatar ===');
+    console.log('Avatar ID to delete:', avatarId);
+    console.log('Current avatars count:', customAvatars.length);
+    
     const updatedAvatars = customAvatars.filter(a => a.id !== avatarId);
+    console.log('Avatars after deletion:', updatedAvatars.length);
+    
     setCustomAvatars(updatedAvatars);
     saveCustomAvatars(updatedAvatars);
+    
     if (selectedAvatar === avatarId) {
+      console.log('Deleted avatar was selected, switching to default');
       setSelectedAvatar('yusuf');
     }
   };
@@ -159,6 +213,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
                     source={avatar.image}
                     style={styles.avatarImage}
                     resizeMode="cover"
+                    defaultSource={avatar.image}
                   />
                   {selectedAvatar === avatar.id && (
                     <View style={styles.checkBadge}>
@@ -200,6 +255,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
                         source={avatar.image}
                         style={styles.avatarImage}
                         resizeMode="cover"
+                        defaultSource={avatar.image}
                       />
                       {selectedAvatar === avatar.id && (
                         <View style={styles.checkBadge}>
@@ -279,11 +335,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    justifyContent: 'space-between',
   },
   avatarWrapper: {
-    flex: 1,
-    minWidth: 158,
+    width: '48%', // Ensures 2 avatars per row with some space between
+    marginBottom: 16,
   },
   avatarCard: {
     flex: 1,
@@ -293,7 +349,7 @@ const styles = StyleSheet.create({
   },
   avatarImageContainer: {
     width: '100%',
-    height: 200, // Fixed height
+    aspectRatio: 3/4,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
@@ -306,8 +362,10 @@ const styles = StyleSheet.create({
   },
   avatarImage: {
     width: '100%',
-    height: 200, // Fixed height to match container
+    height: '100%',
     resizeMode: 'cover',
+    // Ensure consistent aspect ratio and prevent cropping issues
+    borderRadius: 0,
   },
   checkBadge: {
     position: 'absolute',

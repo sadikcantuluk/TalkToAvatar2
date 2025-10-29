@@ -1,14 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { Button, DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
+import {
+  translateText,
+  generateTextToSpeech,
+  generateSpeechOnly,
+  playAudio,
+  stopAudio,
+  startRecording,
+  stopRecording,
+  transcribeAudio,
+} from '../services/openAI';
+
+const USER_HISTORY_KEY = '@travel_user_history';
+const COUNTERPART_HISTORY_KEY = '@travel_counterpart_history';
 
 const TravelAssistantScreen = ({ navigation }) => {
   const [userText, setUserText] = useState('');
@@ -17,6 +35,72 @@ const TravelAssistantScreen = ({ navigation }) => {
   const [counterpartLanguage, setCounterpartLanguage] = useState('es');
   const [userVoice, setUserVoice] = useState('nova');
   const [counterpartVoice, setCounterpartVoice] = useState('onyx');
+  
+  // History management
+  const [userHistory, setUserHistory] = useState([]);
+  const [counterpartHistory, setCounterpartHistory] = useState([]);
+  const [userHistoryIndex, setUserHistoryIndex] = useState(-1);
+  const [counterpartHistoryIndex, setCounterpartHistoryIndex] = useState(-1);
+  
+  // Recording states
+  const [isUserRecording, setIsUserRecording] = useState(false);
+  const [isCounterpartRecording, setIsCounterpartRecording] = useState(false);
+  const userRecordingRef = useRef(null);
+  const counterpartRecordingRef = useRef(null);
+  
+  // Speaking states
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [isCounterpartSpeaking, setIsCounterpartSpeaking] = useState(false);
+  
+  // Sending states
+  const [isSending, setIsSending] = useState(false);
+
+  // Load history on mount
+  useEffect(() => {
+    loadHistory();
+    return () => {
+      // Cleanup
+      stopAudio();
+    };
+  }, []);
+
+  const loadHistory = async () => {
+    try {
+      console.log('=== Loading Travel Assistant History ===');
+      const userHist = await AsyncStorage.getItem(USER_HISTORY_KEY);
+      const counterpartHist = await AsyncStorage.getItem(COUNTERPART_HISTORY_KEY);
+      
+      if (userHist) {
+        const parsed = JSON.parse(userHist);
+        setUserHistory(parsed);
+        console.log('Loaded user history items:', parsed.length);
+      }
+      
+      if (counterpartHist) {
+        const parsed = JSON.parse(counterpartHist);
+        setCounterpartHistory(parsed);
+        console.log('Loaded counterpart history items:', parsed.length);
+      }
+    } catch (error) {
+      console.error('Error loading history:', error);
+    }
+  };
+
+  const saveToHistory = async (text, isUser) => {
+    try {
+      const key = isUser ? USER_HISTORY_KEY : COUNTERPART_HISTORY_KEY;
+      const currentHistory = isUser ? userHistory : counterpartHistory;
+      const setHistory = isUser ? setUserHistory : setCounterpartHistory;
+      
+      const newHistory = [text, ...currentHistory.filter(t => t !== text)].slice(0, 20);
+      setHistory(newHistory);
+      await AsyncStorage.setItem(key, JSON.stringify(newHistory));
+      
+      console.log(`Saved to ${isUser ? 'user' : 'counterpart'} history. Total: ${newHistory.length}`);
+    } catch (error) {
+      console.error('Error saving history:', error);
+    }
+  };
 
   const handleModeChange = (mode) => {
     if (mode === 'tts') {
@@ -26,13 +110,208 @@ const TravelAssistantScreen = ({ navigation }) => {
     }
   };
 
+  // Mic handlers
+  const handleMicPress = async (isUser) => {
+    const isRecording = isUser ? isUserRecording : isCounterpartRecording;
+    const setRecording = isUser ? setIsUserRecording : setIsCounterpartRecording;
+    const recordingRef = isUser ? userRecordingRef : counterpartRecordingRef;
+    const setText = isUser ? setUserText : setCounterpartText;
+    const side = isUser ? 'User' : 'Counterpart';
+
+    try {
+      if (isRecording) {
+        console.log(`=== ${side} Stopping Recording ===`);
+        setRecording(false);
+        
+        if (recordingRef.current) {
+          const result = await stopRecording(recordingRef.current);
+          
+          if (result.success) {
+            console.log(`${side} transcribing audio...`);
+            const transcription = await transcribeAudio(result.uri);
+            
+            if (transcription.success) {
+              console.log(`✅ ${side} transcription successful:`, transcription.text);
+              setText(transcription.text);
+              await saveToHistory(transcription.text, isUser);
+            } else {
+              Alert.alert('Error', 'Failed to transcribe audio');
+            }
+          }
+          
+          recordingRef.current = null;
+        }
+      } else {
+        console.log(`=== ${side} Starting Recording ===`);
+        const result = await startRecording();
+        
+        if (result.success) {
+          recordingRef.current = result.recording;
+          setRecording(true);
+        } else {
+          Alert.alert('Error', 'Failed to start recording. Please grant microphone permission.');
+        }
+      }
+    } catch (error) {
+      console.error(`${side} mic error:`, error);
+      setRecording(false);
+      recordingRef.current = null;
+      Alert.alert('Error', 'Microphone error. Please try again.');
+    }
+  };
+
+  // Send handlers
+  const handleSend = async (isUser) => {
+    const text = isUser ? userText : counterpartText;
+    const sourceLang = isUser ? userLanguage : counterpartLanguage;
+    const targetLang = isUser ? counterpartLanguage : userLanguage;
+    const setText = isUser ? setCounterpartText : setUserText;
+    const side = isUser ? 'User' : 'Counterpart';
+
+    if (!text.trim()) {
+      Alert.alert('Error', 'Please enter some text');
+      return;
+    }
+
+    try {
+      console.log(`=== ${side} Sending Message ===`);
+      console.log('Source language:', sourceLang);
+      console.log('Target language:', targetLang);
+      console.log('Text:', text);
+      
+      setIsSending(true);
+      
+      // Save to history
+      await saveToHistory(text, isUser);
+      
+      // Translate if languages are different
+      let translatedText = text;
+      if (sourceLang !== targetLang) {
+        console.log('Translating message...');
+        const result = await translateText(text, targetLang);
+        
+        if (result.success) {
+          translatedText = result.translatedText;
+          console.log('✅ Translation successful:', translatedText);
+        } else {
+          console.warn('Translation failed, using original text');
+        }
+      } else {
+        console.log('Same language, no translation needed');
+      }
+      
+      // Set translated text to other side
+      setText(translatedText);
+      await saveToHistory(translatedText, !isUser);
+      
+      console.log('✅ Message sent successfully');
+    } catch (error) {
+      console.error(`${side} send error:`, error);
+      Alert.alert('Error', 'Failed to send message');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Speak handlers
+  const handleSpeak = async (isUser) => {
+    const text = isUser ? userText : counterpartText;
+    const language = isUser ? userLanguage : counterpartLanguage;
+    const voice = isUser ? userVoice : counterpartVoice;
+    const isSpeaking = isUser ? isUserSpeaking : isCounterpartSpeaking;
+    const setSpeaking = isUser ? setIsUserSpeaking : setIsCounterpartSpeaking;
+    const side = isUser ? 'User' : 'Counterpart';
+
+    if (!text.trim()) {
+      Alert.alert('Error', 'Please enter some text to speak');
+      return;
+    }
+
+    try {
+      if (isSpeaking) {
+        console.log(`${side} stopping speech`);
+        await stopAudio();
+        setSpeaking(false);
+      } else {
+        console.log(`=== ${side} Speaking ===`);
+        console.log('Text preview:', text.substring(0, 50) + '...');
+        console.log('Text length:', text.length);
+        console.log('Selected Language (for reference):', language);
+        console.log('Selected Voice:', voice);
+        console.log('✅ Using generateSpeechOnly - NO translation will occur');
+        
+        // Generate speech ONLY - text is already in correct language
+        // This function will NOT translate, just convert text to speech
+        const result = await generateSpeechOnly(text, voice);
+        
+        if (result.success) {
+          setSpeaking(true);
+          await playAudio(result.audioUri, () => {
+            setSpeaking(false);
+          });
+          console.log('✅ Speech playback started - text spoken as-is');
+        } else {
+          Alert.alert('Error', 'Failed to generate speech');
+        }
+      }
+    } catch (error) {
+      console.error(`${side} speak error:`, error);
+      console.error('Error stack:', error.stack);
+      setSpeaking(false);
+      Alert.alert('Error', 'Failed to speak text');
+    }
+  };
+
+  // History navigation
+  const handleHistoryNavigation = (isUser, direction) => {
+    const history = isUser ? userHistory : counterpartHistory;
+    const currentIndex = isUser ? userHistoryIndex : counterpartHistoryIndex;
+    const setIndex = isUser ? setUserHistoryIndex : setCounterpartHistoryIndex;
+    const setText = isUser ? setUserText : setCounterpartText;
+
+    if (history.length === 0) return;
+
+    let newIndex = currentIndex;
+    
+    if (direction === 'prev') {
+      newIndex = currentIndex < history.length - 1 ? currentIndex + 1 : currentIndex;
+    } else {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : -1;
+    }
+
+    console.log(`${isUser ? 'User' : 'Counterpart'} history navigation:`, direction, 'index:', newIndex);
+
+    setIndex(newIndex);
+    if (newIndex >= 0) {
+      setText(history[newIndex]);
+    } else {
+      setText('');
+    }
+  };
+
+  // Clear handlers
+  const handleClear = (isUser) => {
+    console.log(`Clearing ${isUser ? 'user' : 'counterpart'} text`);
+    if (isUser) {
+      setUserText('');
+      setUserHistoryIndex(-1);
+    } else {
+      setCounterpartText('');
+      setCounterpartHistoryIndex(-1);
+    }
+  };
+
   return (
     <DashboardLayout 
       currentMode="travel" 
       onModeChange={handleModeChange}
       navigation={navigation}
     >
-      <View style={styles.container}>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={100}
+      >
         {/* User Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -54,26 +333,71 @@ const TravelAssistantScreen = ({ navigation }) => {
           <View style={styles.textAreaWrapper}>
             <TextInput
               style={styles.textArea}
-              placeholder="Type or tap the mic to speak... (0/500)"
+              placeholder={`Type or tap the mic to speak... (${userText.length}/500)`}
               placeholderTextColor={COLORS.gray[400]}
               value={userText}
               onChangeText={setUserText}
               multiline
               maxLength={500}
             />
+            {userText.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButtonInside}
+                onPress={() => handleClear(true)}
+              >
+                <Ionicons name="close-circle" size={24} color={COLORS.gray[400]} />
+              </TouchableOpacity>
+            )}
             <View style={styles.arrowButtons}>
-              <TouchableOpacity><Ionicons name="chevron-back" size={24} color={COLORS.gray[400]} /></TouchableOpacity>
-              <TouchableOpacity><Ionicons name="chevron-forward" size={24} color={COLORS.gray[400]} /></TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => handleHistoryNavigation(true, 'prev')}
+                disabled={userHistory.length === 0 || userHistoryIndex >= userHistory.length - 1}
+              >
+                <Ionicons 
+                  name="chevron-back" 
+                  size={24} 
+                  color={userHistory.length === 0 || userHistoryIndex >= userHistory.length - 1 ? COLORS.gray[600] : COLORS.gray[400]} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => handleHistoryNavigation(true, 'next')}
+                disabled={userHistory.length === 0 || userHistoryIndex <= 0}
+              >
+                <Ionicons 
+                  name="chevron-forward" 
+                  size={24} 
+                  color={userHistory.length === 0 || userHistoryIndex <= 0 ? COLORS.gray[600] : COLORS.gray[400]} 
+                />
+              </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.micButton}>
-              <Ionicons name="mic" size={28} color={COLORS.primary} />
+            <TouchableOpacity 
+              style={[styles.micButton, isUserRecording && styles.micButtonActive]}
+              onPress={() => handleMicPress(true)}
+            >
+              <Ionicons 
+                name={isUserRecording ? "stop-circle" : "mic"} 
+                size={28} 
+                color={isUserRecording ? "#ef4444" : COLORS.primary} 
+              />
             </TouchableOpacity>
             <View style={styles.buttonRow}>
-              <Button title="Speak" variant="outline" style={styles.smallButton} />
-              <Button title="Send" variant="primary" style={styles.smallButton} />
+              <Button 
+                title={isUserSpeaking ? "Stop" : "Speak"} 
+                variant="outline" 
+                style={styles.smallButton}
+                onPress={() => handleSpeak(true)}
+                disabled={!userText.trim()}
+              />
+              <Button 
+                title={isSending ? "Sending..." : "Send"} 
+                variant="primary" 
+                style={styles.smallButton}
+                onPress={() => handleSend(true)}
+                disabled={!userText.trim() || isSending}
+              />
             </View>
           </View>
         </View>
@@ -102,30 +426,75 @@ const TravelAssistantScreen = ({ navigation }) => {
           <View style={styles.textAreaWrapper}>
             <TextInput
               style={styles.textArea}
-              placeholder="Escriba o toque el micrófono... (0/500)"
+              placeholder={`Type or tap the mic to speak... (${counterpartText.length}/500)`}
               placeholderTextColor={COLORS.gray[400]}
               value={counterpartText}
               onChangeText={setCounterpartText}
               multiline
               maxLength={500}
             />
+            {counterpartText.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButtonInside}
+                onPress={() => handleClear(false)}
+              >
+                <Ionicons name="close-circle" size={24} color={COLORS.gray[400]} />
+              </TouchableOpacity>
+            )}
             <View style={styles.arrowButtons}>
-              <TouchableOpacity><Ionicons name="chevron-back" size={24} color={COLORS.gray[400]} /></TouchableOpacity>
-              <TouchableOpacity><Ionicons name="chevron-forward" size={24} color={COLORS.gray[400]} /></TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => handleHistoryNavigation(false, 'prev')}
+                disabled={counterpartHistory.length === 0 || counterpartHistoryIndex >= counterpartHistory.length - 1}
+              >
+                <Ionicons 
+                  name="chevron-back" 
+                  size={24} 
+                  color={counterpartHistory.length === 0 || counterpartHistoryIndex >= counterpartHistory.length - 1 ? COLORS.gray[600] : COLORS.gray[400]} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => handleHistoryNavigation(false, 'next')}
+                disabled={counterpartHistory.length === 0 || counterpartHistoryIndex <= 0}
+              >
+                <Ionicons 
+                  name="chevron-forward" 
+                  size={24} 
+                  color={counterpartHistory.length === 0 || counterpartHistoryIndex <= 0 ? COLORS.gray[600] : COLORS.gray[400]} 
+                />
+              </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.micButton}>
-              <Ionicons name="mic" size={28} color={COLORS.primary} />
+            <TouchableOpacity 
+              style={[styles.micButton, isCounterpartRecording && styles.micButtonActive]}
+              onPress={() => handleMicPress(false)}
+            >
+              <Ionicons 
+                name={isCounterpartRecording ? "stop-circle" : "mic"} 
+                size={28} 
+                color={isCounterpartRecording ? "#ef4444" : COLORS.primary} 
+              />
             </TouchableOpacity>
             <View style={styles.buttonRow}>
-              <Button title="Speak" variant="outline" style={styles.smallButton} />
-              <Button title="Send" variant="primary" style={styles.smallButton} />
+              <Button 
+                title={isCounterpartSpeaking ? "Stop" : "Speak"} 
+                variant="outline" 
+                style={styles.smallButton}
+                onPress={() => handleSpeak(false)}
+                disabled={!counterpartText.trim()}
+              />
+              <Button 
+                title={isSending ? "Sending..." : "Send"} 
+                variant="primary" 
+                style={styles.smallButton}
+                onPress={() => handleSend(false)}
+                disabled={!counterpartText.trim() || isSending}
+              />
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </DashboardLayout>
   );
 };
@@ -153,6 +522,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  clearButtonInside: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 12,
   },
   voiceSelector: {
     minWidth: 130,
@@ -195,6 +572,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(19, 127, 236, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
   },
   buttonRow: {
     flex: 1,
