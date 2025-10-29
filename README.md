@@ -1,170 +1,323 @@
-# TalkToAvatar - React Native App
+# TalkToAvatar - AI Avatar Video Creation App
 
-A mobile application that allows users to create and interact with AI avatars using text-to-speech, travel assistant, and avatar-to-video features.
+Modern React Native (Expo) mobil uygulaması - Avatar'larla konuşma, metinden ses üretme, AI avatar video oluşturma ve seyahat asistanı özellikleri.
 
-## 🚀 Project Structure
+## 🚀 Özellikler
 
+- **Text-to-Speech**: OpenAI TTS ile çok dilli, doğal ses üretimi
+- **Avatar to Video**: Fal.ai Kling AI ile avatar videoları oluşturma
+- **Travel Assistant**: Seyahat önerileri ve bilgilendirme
+- **Custom Avatar Creation**: Google Gemini API ile özel avatar oluşturma
+- **Multi-Language Support**: Otomatik çeviri ile çoklu dil desteği
+- **Notifications System**: Real-time bildirimler (video hazır olunca)
+- **History Management**: Ses ve video geçmişi yönetimi
+- **Voice Recording**: Ses kaydı ile metin oluşturma (STT)
+- **Modern UI**: Dark theme, glassmorphism efektleri, smooth animations
+
+## 📋 Gereksinimler
+
+- Node.js 18+
+- npm veya yarn
+- Expo CLI
+- iOS Simulator / Android Emulator veya fiziksel cihaz
+- API Keys:
+  - OpenAI API key (TTS ve STT için)
+  - Fal.ai API key (Video oluşturma için)
+  - Google AI API key (Custom avatar için)
+
+## 🛠️ Kurulum
+
+### 1. Projeyi İndirin
+
+```bash
+git clone <repository-url>
+cd TalkToAvatar
 ```
-TalkToAvatar/
-├── src/
-│   ├── components/          # Reusable components
-│   │   ├── Button.js
-│   │   ├── Input.js
-│   │   ├── Header.js
-│   │   ├── AvatarCard.js
-│   │   ├── LoadingDots.js
-│   │   └── index.js
-│   ├── screens/            # App screens
-│   │   ├── SplashScreen.js
-│   │   ├── WelcomeScreen.js
-│   │   ├── SelectAvatarScreen.js
-│   │   ├── CreateCustomAvatarScreen.js
-│   │   ├── DashboardScreen.js
-│   │   └── index.js
-│   ├── navigation/         # Navigation setup
-│   │   └── AppNavigator.js
-│   └── constants/          # App constants (theme, images, etc.)
-│       ├── theme.js
-│       ├── images.js
-│       └── index.js
-├── assets/                 # Images and static files
-│   ├── logo.png
-│   ├── yusuf.jpg
-│   └── eda.jpg
-├── App.js                  # Main app entry
-└── package.json
-```
 
-## 📦 Installation
+### 2. Bağımlılıkları Yükleyin
 
-1. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Start the development server:
+veya
+
+```bash
+yarn install
+```
+
+### 3. Environment Dosyasını Yapılandırın
+
+Proje kök dizininde `.env` dosyası oluşturun:
+
+```env
+# OpenAI API (TTS ve STT için)
+OPENAI_API_KEY=sk-XXXXX
+
+# Fal.ai API (Video oluşturma için)
+FAL_API_KEY=your-fal-api-key
+
+# Google AI API (Custom avatar için)
+GOOGLE_AI_API_KEY=your-google-ai-api-key
+```
+
+### 4. API Key'leri Nasıl Alınır
+
+**OpenAI API Key:**
+1. https://platform.openai.com/api-keys adresine gidin
+2. Hesap oluşturun veya giriş yapın
+3. "Create new secret key" butonuna tıklayın
+4. API key'i kopyalayın ve `.env` dosyasına ekleyin
+
+**Fal.ai API Key:**
+1. https://fal.ai/ adresine gidin
+2. Hesap oluşturun
+3. Dashboard'dan API Key oluşturun
+4. API key'i `.env` dosyasına ekleyin
+
+**Google AI API Key:**
+1. https://aistudio.google.com/app/apikey adresine gidin
+2. Google hesabınızla giriş yapın
+3. "Create API Key" butonuna tıklayın
+4. API key'i `.env` dosyasına ekleyin
+
+### 5. Geliştirme Sunucusunu Başlatın
+
 ```bash
 npm start
 ```
 
-3. Run on your device:
-- **iOS**: Press `i` or scan QR code with Expo Go app
-- **Android**: Press `a` or scan QR code with Expo Go app
-- **Web**: Press `w`
+veya
 
-## 🎨 Features Implemented
-
-### ✅ Screens Created:
-1. **Splash Screen** - Animated logo with loading indicator
-2. **Welcome Screen** - Carousel showcasing app features
-3. **Select Avatar Screen** - Choose from default avatars or create custom
-4. **Create Custom Avatar Screen** - Upload photo and create personalized avatar
-5. **Dashboard (TTS Mode)** - Main screen with text-to-speech functionality
-
-### ✅ Reusable Components:
-- **Button** - Flexible button with variants (primary, secondary, outline, ghost)
-- **Input** - Text input with label, icons, and validation
-- **Header** - App bar with back button and title
-- **AvatarCard** - Avatar selection card with image and details
-- **LoadingDots** - Animated loading indicator
-
-### ✅ Navigation:
-- React Navigation configured with stack navigation
-- Smooth transitions between screens
-- Proper navigation flow from Splash → Welcome → Avatar Selection → Dashboard
-
-## 🎯 Next Steps
-
-To complete the app functionality, you'll need to:
-
-1. **Install dependencies** (already added to package.json):
-   - React Navigation
-   - Expo Image Picker
-   - Vector Icons
-
-2. **Implement API integrations**:
-   - OpenAI API for TTS and STT
-   - Google Gemini API for custom avatar generation
-   - Fal.ai API for avatar-to-video conversion
-
-3. **Add remaining modes**:
-   - Travel Assistant mode
-   - Avatar to Video mode
-
-4. **Implement features**:
-   - Voice recording (STT)
-   - Audio playback
-   - Avatar animation during speech
-   - Video generation and playback
-   - History/past outputs
-
-## 🔑 Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-OPENAI_API_KEY=your_openai_key_here
-GOOGLE_AI_API_KEY=your_gemini_key_here
-FAL_API_KEY=your_fal_key_here
+```bash
+yarn start
 ```
 
-## 📱 Screens Overview
+### 6. Cihazda Çalıştırın
 
-### Splash Screen
-- Displays app logo
-- Animated loading indicator
-- Auto-navigates to Welcome after 3 seconds
+- **iOS**: Terminal'de `i` tuşuna basın veya Expo Go uygulamasıyla QR kodu tarayın
+- **Android**: Terminal'de `a` tuşuna basın veya Expo Go uygulamasıyla QR kodu tarayın
+- **Web**: Terminal'de `w` tuşuna basın
 
-### Welcome Screen
-- Horizontal carousel showing 3 app modes
-- Language selector
-- Page indicators
-- Get Started / Skip buttons
+## 📁 Proje Yapısı
 
-### Select Avatar Screen
-- Grid layout of default avatars
-- Create custom avatar button
-- Selected avatar highlighted with check mark
-- Continue button to proceed
+```
+TalkToAvatar/
+├── src/
+│   ├── components/              # Yeniden kullanılabilir bileşenler
+│   │   ├── Button.js
+│   │   ├── Input.js
+│   │   ├── Header.js
+│   │   ├── AvatarCard.js
+│   │   ├── LanguageSelector.js
+│   │   ├── VoiceSelector.js
+│   │   ├── DashboardLayout.js
+│   │   └── LoadingDots.js
+│   ├── screens/                 # Uygulama ekranları
+│   │   ├── SplashScreen.js
+│   │   ├── WelcomeScreen.js
+│   │   ├── SelectAvatarScreen.js
+│   │   ├── CreateCustomAvatarScreen.js
+│   │   ├── TextToSpeechScreen.js
+│   │   ├── AvatarToVideoScreen.js
+│   │   ├── TravelAssistantScreen.js
+│   │   ├── PastAudioListScreen.js
+│   │   ├── PastVideosListScreen.js
+│   │   └── VideoViewingScreen.js
+│   ├── services/               # API servisleri
+│   │   ├── openAI.js          # OpenAI TTS/STT
+│   │   ├── falAI.js           # Fal.ai Video
+│   │   └── googleAI.js        # Google Gemini
+│   ├── context/                # React Context API
+│   │   ├── NotificationContext.js
+│   │   └── index.js
+│   ├── navigation/             # Navigasyon yapılandırması
+│   │   └── AppNavigator.js
+│   └── constants/              # Sabitler
+│       ├── theme.js
+│       ├── images.js
+│       └── index.js
+├── assets/                      # Görseller ve statik dosyalar
+│   ├── logo.png
+│   ├── icon.png
+│   ├── yusuf.jpg
+│   └── eda.jpg
+├── App.js                       # Ana uygulama giriş noktası
+├── package.json
+├── babel.config.js
+├── app.json                     # Expo yapılandırması
+└── .env                         # Environment değişkenleri (git'e eklemeyin!)
+```
 
-### Create Custom Avatar Screen
-- Three-step process: Upload → Loading → Confirmation
-- Image picker integration
-- Avatar name input
-- Preview and accept/recreate options
+## 🎯 Kullanım
 
-### Dashboard (TTS Mode)
-- Avatar display with select button
-- Output name input
-- Text input with voice recording option
-- Voice and language selection
-- Create/Play button
-- Past audio history access
+### Text-to-Speech Mode
+1. Avatar seçin (varsayılan veya özel)
+2. Metin girin veya ses kaydedin
+3. Ses ve dil seçin
+4. Ses dosyası oluşturun
+5. Oynatın veya geçmişe kaydedin
 
-## 🎨 Design System
+### Avatar to Video Mode
+1. Avatar seçin
+2. Video için metin yazın
+3. Ses ve dil seçin (metin otomatik çevrilir)
+4. Video adı girin
+5. Video oluşturun (2-5 dakika)
+6. Video hazır olunca bildirim alın
+7. Videoyu izleyin veya galeriye kaydedin
 
-### Colors
-- Primary: `#137fec`
-- Secondary: `#A626D3`
-- Background Dark: `#101922`
-- Text Light: `#F0F0F0`
+### Travel Assistant Mode
+1. Seyahat planınız hakkında konuşun veya yazın
+2. AI asistanı öneriler sunar
+3. Ses kayıtlarını dinleyin
+4. Geçmiş konuşmaları görüntüleyin
 
-### Components
-All components follow a consistent design system with:
-- Rounded corners
-- Glassmorphism effects
-- Smooth animations
-- Dark theme optimized
+### Custom Avatar Creation
+1. "Create Custom Avatar" butonuna tıklayın
+2. Fotoğraf yükleyin
+3. Avatar adı girin
+4. AI avatar oluşturun
+5. Özel avatarınızı kullanın
 
-## 📝 Notes
+## 🔧 Yapılandırma
 
-- Built with Expo for cross-platform compatibility
-- Uses React Navigation for navigation
-- Implements modern React patterns and hooks
-- Responsive design for various screen sizes
-- Optimized for dark mode
+Tüm yapılandırma ayarları `.env` dosyasında tutulur:
 
-## 🤝 Contributing
+- **OPENAI_API_KEY**: OpenAI API anahtarı (TTS ve STT için - gerekli)
+- **FAL_API_KEY**: Fal.ai API anahtarı (Video oluşturma için - gerekli)
+- **GOOGLE_AI_API_KEY**: Google AI API anahtarı (Custom avatar için - gerekli)
 
-This project is part of the TalkToAvatar mobile application. Follow the coding standards and component patterns established in the existing codebase.
+## 💾 Veri Saklama
 
+### AsyncStorage
+Kullanıcı verileri yerel olarak AsyncStorage'da saklanır:
+- Ses geçmişi (`@audio_history`)
+- Video geçmişi (`@video_history`)
+- Özel avatarlar (`@custom_avatars`)
+- Bildirimler (`@notifications`)
+
+### Dosya Saklama
+- Ses dosyaları: `FileSystem.documentDirectory` (geçici)
+- Video dosyaları: `FileSystem.documentDirectory` (geçici)
+- Export: Galeriye kaydedilen dosyalar
+
+### Bildirimler
+- Real-time bildirim sistemi (Context API)
+- Video hazır olunca otomatik bildirim
+- Okundu/okunmadı takibi
+- AsyncStorage ile kalıcı saklama
+
+## 🎨 Özellikler Detayları
+
+### Çok Dilli Destek
+- Otomatik çeviri (OpenAI GPT)
+- Seçilen dile göre metin çevirisi
+- Video prompt'u otomatik çevrilmiş metinle oluşturulur
+- Desteklenen diller: İngilizce, Türkçe, Almanca, Fransızca, İspanyolca, ve daha fazlası
+
+### Bildirim Sistemi
+- Real-time bildirimler (Context API)
+- Video hazır olunca otomatik bildirim
+- Header'da kırmızı badge ile okunmamış sayısı
+- Modal ile bildirimleri görüntüleme
+- Okunmuş/okunmamış ayrımı
+- Bildirime tıklayınca ilgili sayfaya yönlendirme
+
+### Video İşleme
+- Fal.ai Kling AI ile profesyonel video oluşturma
+- Avatar + Ses + Metin kombinasyonu
+- Video hazır olunca bildirim
+- Video oynatıcı (tekrar oynatma desteği)
+- Galeriye export
+
+## 🐛 Sorun Giderme
+
+### Yaygın Sorunlar
+
+**"Module not found" hatası:**
+```bash
+# node_modules'ı temizleyip yeniden yükleyin
+rm -rf node_modules
+npm install
+```
+
+**API Key hatası:**
+- `.env` dosyasında API key'lerin doğru yazıldığından emin olun
+- `react-native-dotenv` yapılandırmasını kontrol edin
+- API key'lerin geçerli olduğunu kontrol edin
+
+**Video oluşturma hatası:**
+- Fal.ai API key'inin geçerli olduğundan emin olun
+- İnternet bağlantısını kontrol edin
+- Video oluşturma 2-5 dakika sürebilir, bekleyin
+
+**Ses kaydedilemiyor:**
+- Cihaz izinlerini kontrol edin
+- Microphone izni verildiğinden emin olun
+
+**Bildirimler görünmüyor:**
+- AsyncStorage izinlerini kontrol edin
+- Uygulamayı yeniden başlatın
+
+### Geliştirme İpuçları
+
+**Cache temizleme:**
+```bash
+# Expo cache'i temizle
+npx expo start -c
+
+# Metro bundler cache'i temizle
+npm start -- --reset-cache
+```
+
+**Log görüntüleme:**
+- iOS: Simulator'da logları görmek için `⌘ + D` → "Debug"
+- Android: `adb logcat` komutu ile logları görüntüleyin
+
+## 📝 Notlar
+
+- Expo SDK 54 kullanılmaktadır
+- React Navigation v7 ile navigasyon yönetimi
+- Context API ile state management
+- AsyncStorage ile yerel veri saklama
+- Dark theme optimize edilmiş
+- Cross-platform (iOS, Android, Web)
+- Responsive tasarım
+
+## 🔐 Güvenlik
+
+- API key'ler `.env` dosyasında saklanır (git'e eklenmez)
+- `.gitignore` dosyasında `.env` tanımlıdır
+- Production'da API key'leri güvenli sunucuda saklayın
+- Client-side'da API key'leri expose etmekten kaçının
+
+## 📱 Desteklenen Platformlar
+
+- ✅ iOS (Expo Go, Standalone)
+- ✅ Android (Expo Go, Standalone)
+- ✅ Web (Sınırlı özellikler)
+
+## 🎯 Gelecek Özellikler
+
+- [ ] Cloud storage entegrasyonu
+- [ ] Çoklu avatar ile video
+- [ ] Sosyal medya paylaşımı
+- [ ] Premium özellikler
+- [ ] Offline mod desteği
+
+## 📝 Lisans
+
+Internal development and testing only.
+
+## 👨‍💻 Geliştirici
+
+Sadıkcan TULUK - sadikcantuluk@gmail.com
+
+## 🤝 Katkıda Bulunma
+
+Bu proje TalkToAvatar mobil uygulamasının bir parçasıdır. Mevcut kod tabanında belirlenen kodlama standartlarına ve bileşen pattern'lerine uyun.
+
+---
+
+**Not**: Bu uygulama geliştirme aşamasındadır. Production kullanımı için ek güvenlik ve optimizasyonlar gereklidir.
