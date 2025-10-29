@@ -309,9 +309,15 @@ const TravelAssistantScreen = ({ navigation }) => {
     >
       <KeyboardAvoidingView 
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={100}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         {/* User Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -494,6 +500,7 @@ const TravelAssistantScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </DashboardLayout>
   );
@@ -503,9 +510,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   section: {
     flex: 1,
     padding: SIZES.padding,
+    minHeight: 250,
   },
   sectionHeader: {
     flexDirection: 'row',

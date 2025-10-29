@@ -198,17 +198,20 @@ export const generateTextToSpeech = async (text, voiceId, languageCode) => {
       throw new Error('OpenAI API key not found');
     }
 
-    // Translate text if not English
+    // Always translate text to selected language
+    // This ensures the text is in the correct language regardless of input
     let finalText = text;
-    if (languageCode !== 'en') {
-      console.log('Translating text to:', languageNames[languageCode]);
-      const translateResult = await translateText(text, languageCode);
-      if (translateResult.success) {
-        finalText = translateResult.translatedText;
-        console.log('Translation successful. New text length:', finalText.length);
-      } else {
-        console.warn('Translation failed, using original text');
-      }
+    console.log('🌐 Translating text to:', languageNames[languageCode] || languageCode);
+    console.log('Original text preview:', text.substring(0, 100) + '...');
+    
+    const translateResult = await translateText(text, languageCode);
+    if (translateResult.success) {
+      finalText = translateResult.translatedText;
+      console.log('✅ Translation successful. Translated text length:', finalText.length);
+      console.log('Translated text preview:', finalText.substring(0, 100) + '...');
+    } else {
+      console.warn('⚠️  Translation failed, using original text');
+      finalText = text;
     }
 
     // Configure audio mode

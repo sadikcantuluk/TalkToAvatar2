@@ -1,20 +1,101 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { Header, Button } from '../components';
 
-const videoList = [
-  { id: 1, title: 'Welcome Message - Version 2', date: 'Created: Oct 26, 2023' },
-  { id: 2, title: 'Product Update Q3', date: 'Created: Oct 24, 2023' },
-  { id: 3, title: 'Monthly Sales Report', date: 'Created: Oct 22, 2023' },
-];
+const VIDEO_HISTORY_KEY = '@video_history';
 
 const PastVideosListScreen = ({ navigation }) => {
-  const [videoItems, setVideoItems] = React.useState(videoList);
+  const [videoItems, setVideoItems] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleDelete = (id) => {
-    setVideoItems(prev => prev.filter(item => item.id !== id));
+  useEffect(() => {
+    loadVideoHistory();
+  }, []);
+
+  const loadVideoHistory = async () => {
+    try {
+      console.log('=== Loading Video History ===');
+      const history = await AsyncStorage.getItem(VIDEO_HISTORY_KEY);
+      if (history) {
+        const videos = JSON.parse(history);
+        console.log('Loaded video items:', videos.length);
+        setVideoItems(videos);
+      } else {
+        console.log('No video history found');
+        setVideoItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading video history:', error);
+      setVideoItems([]);
+    }
+  };
+
+  const handleRefresh = async () => {
+    console.log('=== Refreshing Video History ===');
+    setRefreshing(true);
+    await loadVideoHistory();
+    setRefreshing(false);
+  };
+
+  const handleDelete = async (id) => {
+    console.log('=== Deleting Video ===');
+    console.log('Video ID:', id);
+    
+    Alert.alert(
+      'Delete Video',
+      'Are you sure you want to delete this video?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updatedItems = videoItems.filter(item => item.id !== id);
+              await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(updatedItems));
+              setVideoItems(updatedItems);
+              console.log('Video deleted. Remaining items:', updatedItems.length);
+            } catch (error) {
+              console.error('Error deleting video:', error);
+              Alert.alert('Error', 'Failed to delete video');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleWatch = (item) => {
+    console.log('=== Watching Video ===');
+    console.log('Video:', item.name);
+    navigation.navigate('VideoViewing', { video: item });
+  };
+
+  const handleUse = (item) => {
+    console.log('=== Using Video Parameters ===');
+    console.log('Video:', item.name);
+    console.log('Parameters:', {
+      name: item.name,
+      text: item.text,
+      voice: item.voice,
+      language: item.language,
+      avatarName: item.avatarName,
+    });
+    
+    navigation.navigate('AvatarToVideo', {
+      loadVideo: item,
+    });
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return `Created: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
   };
 
   return (
@@ -25,64 +106,145 @@ const PastVideosListScreen = ({ navigation }) => {
         onBackPress={() => navigation.goBack()}
       />
 
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color={COLORS.gray[400]} />
-        <Text style={styles.searchPlaceholder}>Search videos by title</Text>
-      </View>
-
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {videoItems.map(item => (
-          <View key={item.id} style={styles.videoCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.videoInfo}>
-                <Text style={styles.videoTitle}>{item.title}</Text>
-                <Text style={styles.videoDate}>{item.date}</Text>
-              </View>
-              <View style={styles.thumbnail} />
-            </View>
-            <View style={styles.cardActions}>
-              <Button 
-                title="Watch" 
-                variant="primary" 
-                style={styles.actionBtn}
-                icon={<Ionicons name="play-circle" size={20} color={COLORS.white} />}
-                onPress={() => navigation.navigate('VideoViewing')}
-              />
-              <Button 
-                title="Use" 
-                variant="secondary" 
-                style={styles.actionBtn}
-                icon={<Ionicons name="create" size={20} color={COLORS.textLight} />}
-              />
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDelete(item.id)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
-              </TouchableOpacity>
-            </View>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
+        {videoItems.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="videocam-off-outline" size={64} color={COLORS.gray[600]} />
+            <Text style={styles.emptyTitle}>No Videos Yet</Text>
+            <Text style={styles.emptyDescription}>
+              Your generated videos will appear here
+            </Text>
           </View>
-        ))}
+        ) : (
+          videoItems.map(item => (
+            <View key={item.id} style={styles.videoCard}>
+              <View style={styles.cardHeader}>
+                <View style={styles.videoInfo}>
+                  <Text style={styles.videoTitle}>{item.name}</Text>
+                  <Text style={styles.videoDate}>{formatDate(item.createdAt)}</Text>
+                  <Text style={styles.videoDetails}>
+                    {item.language.toUpperCase()} • {item.voice}
+                  </Text>
+                </View>
+                <View style={styles.thumbnail}>
+                  <Ionicons name="videocam" size={32} color={COLORS.gray[500]} />
+                </View>
+              </View>
+              <View style={styles.cardActions}>
+                <Button 
+                  title="Watch" 
+                  variant="primary" 
+                  style={styles.actionBtn}
+                  icon={<Ionicons name="play-circle" size={20} color={COLORS.white} />}
+                  onPress={() => handleWatch(item)}
+                />
+                <Button 
+                  title="Use" 
+                  variant="secondary" 
+                  style={styles.actionBtn}
+                  icon={<Ionicons name="create" size={20} color={COLORS.textLight} />}
+                  onPress={() => handleUse(item)}
+                />
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => handleDelete(item.id)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.backgroundDark },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 12, margin: SIZES.padding, padding: 12, backgroundColor: COLORS.gray[800], borderRadius: 12 },
-  searchPlaceholder: { fontSize: SIZES.body2, color: COLORS.gray[400] },
-  scrollView: { flex: 1 },
-  content: { padding: SIZES.padding, gap: 16 },
-  videoCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, gap: 16 },
-  cardHeader: { flexDirection: 'row', gap: 16 },
-  videoInfo: { flex: 2 },
-  videoTitle: { fontSize: SIZES.body1, fontWeight: 'bold', color: COLORS.textLight },
-  videoDate: { fontSize: SIZES.body3, color: COLORS.gray[400], marginTop: 4 },
-  thumbnail: { flex: 1, aspectRatio: 16/9, backgroundColor: COLORS.gray[700], borderRadius: 8 },
-  cardActions: { flexDirection: 'row', gap: 8 },
-  actionBtn: { flex: 1 },
+  container: { 
+    flex: 1, 
+    backgroundColor: COLORS.backgroundDark 
+  },
+  scrollView: { 
+    flex: 1 
+  },
+  content: { 
+    padding: SIZES.padding, 
+    gap: 16,
+    flexGrow: 1,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: SIZES.h4,
+    fontWeight: 'bold',
+    color: COLORS.textLight,
+    marginTop: 16,
+  },
+  emptyDescription: {
+    fontSize: SIZES.body2,
+    color: COLORS.gray[400],
+    textAlign: 'center',
+  },
+  videoCard: { 
+    backgroundColor: 'rgba(255,255,255,0.05)', 
+    borderRadius: 12, 
+    padding: 16, 
+    gap: 16 
+  },
+  cardHeader: { 
+    flexDirection: 'row', 
+    gap: 16 
+  },
+  videoInfo: { 
+    flex: 2 
+  },
+  videoTitle: { 
+    fontSize: SIZES.body1, 
+    fontWeight: 'bold', 
+    color: COLORS.textLight 
+  },
+  videoDate: { 
+    fontSize: SIZES.body4, 
+    color: COLORS.gray[400], 
+    marginTop: 4 
+  },
+  videoDetails: {
+    fontSize: SIZES.body4,
+    color: COLORS.gray[500],
+    marginTop: 2,
+  },
+  thumbnail: { 
+    flex: 1, 
+    aspectRatio: 16/9, 
+    backgroundColor: COLORS.gray[700], 
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardActions: { 
+    flexDirection: 'row', 
+    gap: 8 
+  },
+  actionBtn: { 
+    flex: 1 
+  },
   deleteButton: {
     width: 48,
     height: 48,

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../constants';
+import { useNotifications } from '../context/NotificationContext';
 
 const modes = [
   { id: 'tts', name: 'TTS Mode', icon: 'mic' },
@@ -11,7 +12,8 @@ const modes = [
 
 const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation }) => {
   const [modeModalVisible, setModeModalVisible] = useState(false);
-  const [hasNotifications, setHasNotifications] = useState(true);
+  const [notificationModalVisible, setNotificationModalVisible] = useState(false);
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   const currentModeData = modes.find(m => m.id === currentMode) || modes[0];
 
@@ -23,8 +25,31 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
   };
 
   const handleNotifications = () => {
-    // Navigate to notifications screen (future implementation)
-    console.log('Notifications clicked');
+    setNotificationModalVisible(true);
+  };
+
+  const handleNotificationPress = (notification) => {
+    // Mark as read
+    markAsRead(notification.id);
+    
+    // Close modal
+    setNotificationModalVisible(false);
+    
+    // Navigate based on notification type
+    if (notification.type === 'video_ready' && notification.videoData) {
+      navigation.navigate('VideoViewing', { video: notification.videoData });
+    }
+  };
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
   };
 
   return (
@@ -36,7 +61,13 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
           onPress={handleNotifications}
         >
           <Ionicons name="notifications-outline" size={24} color={COLORS.textLight} />
-          {hasNotifications && <View style={styles.notificationDot} />}
+          {unreadCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -104,6 +135,88 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
           </View>
         </View>
       </Modal>
+
+      {/* Notifications Modal */}
+      <Modal
+        visible={notificationModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setNotificationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.notificationModal]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Notifications</Text>
+              <View style={styles.headerActions}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity 
+                    onPress={markAllAsRead}
+                    style={styles.markAllButton}
+                  >
+                    <Text style={styles.markAllText}>Mark all read</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setNotificationModalVisible(false)}>
+                  <Ionicons name="close" size={24} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            {notifications.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="notifications-off-outline" size={64} color={COLORS.gray[600]} />
+                <Text style={styles.emptyText}>No notifications</Text>
+                <Text style={styles.emptySubText}>You're all caught up!</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.notificationList}>
+                {notifications.map((notification) => (
+                  <TouchableOpacity
+                    key={notification.id}
+                    style={[
+                      styles.notificationItem,
+                      !notification.read && styles.notificationItemUnread,
+                    ]}
+                    onPress={() => handleNotificationPress(notification)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[
+                      styles.notificationIcon,
+                      !notification.read && styles.notificationIconUnread,
+                    ]}>
+                      <Ionicons 
+                        name={notification.type === 'video_ready' ? 'videocam' : 'information-circle'} 
+                        size={24} 
+                        color={!notification.read ? COLORS.primary : COLORS.gray[500]} 
+                      />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={[
+                        styles.notificationTitle,
+                        !notification.read && styles.notificationTitleUnread,
+                      ]}>
+                        {notification.title}
+                      </Text>
+                      <Text style={[
+                        styles.notificationMessage,
+                        !notification.read && styles.notificationMessageUnread,
+                      ]}>
+                        {notification.message}
+                      </Text>
+                      <Text style={styles.notificationTime}>
+                        {formatTimeAgo(notification.createdAt)}
+                      </Text>
+                    </View>
+                    {!notification.read && (
+                      <View style={styles.unreadDot} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -132,14 +245,22 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     position: 'relative',
   },
-  notificationDot: {
+  notificationBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 6,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: COLORS.white,
   },
   modeSelector: {
     flexDirection: 'row',
@@ -215,6 +336,100 @@ const styles = StyleSheet.create({
   modeItemTextSelected: {
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  // Notification Modal Styles
+  notificationModal: {
+    maxHeight: '80%',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  markAllButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(19, 127, 236, 0.1)',
+  },
+  markAllText: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  notificationList: {
+    maxHeight: 500,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: SIZES.h4,
+    fontWeight: '600',
+    color: COLORS.textLight,
+  },
+  emptySubText: {
+    fontSize: SIZES.body2,
+    color: COLORS.gray[500],
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[800],
+    backgroundColor: 'transparent',
+  },
+  notificationItemUnread: {
+    backgroundColor: 'rgba(19, 127, 236, 0.05)',
+  },
+  notificationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationIconUnread: {
+    backgroundColor: 'rgba(19, 127, 236, 0.1)',
+  },
+  notificationContent: {
+    flex: 1,
+    gap: 4,
+  },
+  notificationTitle: {
+    fontSize: SIZES.body2,
+    fontWeight: '500',
+    color: COLORS.gray[400],
+  },
+  notificationTitleUnread: {
+    fontWeight: '700',
+    color: COLORS.textLight,
+  },
+  notificationMessage: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[500],
+    lineHeight: 20,
+  },
+  notificationMessageUnread: {
+    color: COLORS.gray[300],
+  },
+  notificationTime: {
+    fontSize: SIZES.body4,
+    color: COLORS.gray[600],
+    marginTop: 4,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+    marginTop: 6,
   },
 });
 

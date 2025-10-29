@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,98 @@ import {
   TouchableOpacity,
   Image,
   TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
 import { COLORS, SIZES, IMAGES } from '../constants';
 import { Button, DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
+import { generateTextToSpeech } from '../services/openAI';
+import { uploadToFal, generateVideo, downloadVideo } from '../services/falAI';
+import { useNotifications } from '../context/NotificationContext';
+
+const VIDEO_HISTORY_KEY = '@video_history';
 
 const AvatarToVideoScreen = ({ navigation, route }) => {
-  const selectedAvatar = route?.params?.selectedAvatar || {
-    name: 'Aria',
+  const { addNotification } = useNotifications();
+  
+  const [selectedAvatar, setSelectedAvatar] = useState({
+    name: 'Yusuf',
     description: 'Natural',
     image: IMAGES.yusuf,
-  };
+  });
 
   const [scriptText, setScriptText] = useState('');
+  const [outputName, setOutputName] = useState('');
   const [selectedVoice, setSelectedVoice] = useState('nova');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const [isCreating, setIsCreating] = useState(false);
+  const [creationProgress, setCreationProgress] = useState('');
+
+  // Handle avatar selection from route params
+  useEffect(() => {
+    if (route?.params?.selectedAvatar) {
+      console.log('=== Avatar Updated from Route Params ===');
+      console.log('New Avatar:', route.params.selectedAvatar.name);
+      setSelectedAvatar(route.params.selectedAvatar);
+    }
+  }, [route?.params?.selectedAvatar]);
+
+  // Handle video params from history
+  useEffect(() => {
+    const loadVideoParams = async () => {
+      if (route?.params?.loadVideo) {
+        console.log('=== Loading Video Parameters from History ===');
+        const video = route.params.loadVideo;
+        console.log('Video ID:', video.id);
+        console.log('Video Name:', video.name);
+        console.log('Text:', video.text);
+        console.log('Voice:', video.voice);
+        console.log('Language:', video.language);
+        console.log('Avatar Name:', video.avatarName);
+
+        setOutputName(video.name || '');
+        setScriptText(video.text || '');
+        setSelectedVoice(video.voice || 'nova');
+        setSelectedLanguage(video.language || 'en');
+
+        // Handle avatar
+        if (video.avatarName === 'Yusuf' || video.avatarName === 'Eda') {
+          console.log('Loading default avatar:', video.avatarName);
+          setSelectedAvatar({
+            name: video.avatarName,
+            description: 'Natural',
+            image: video.avatarName === 'Yusuf' ? IMAGES.yusuf : IMAGES.eda,
+          });
+        } else if (video.avatarName) {
+          console.log('Loading custom avatar:', video.avatarName);
+          try {
+            const customAvatarsJSON = await AsyncStorage.getItem('@custom_avatars');
+            if (customAvatarsJSON) {
+              const customAvatars = JSON.parse(customAvatarsJSON);
+              const customAvatar = customAvatars.find(a => a.name === video.avatarName);
+              if (customAvatar) {
+                console.log('Custom avatar found:', customAvatar.name);
+                setSelectedAvatar({
+                  name: customAvatar.name,
+                  description: 'Custom',
+                  image: { uri: customAvatar.imageUri },
+                });
+              }
+            }
+          } catch (error) {
+            console.error('Error loading custom avatar:', error);
+          }
+        }
+
+        console.log('✅ All parameters loaded successfully');
+      }
+    };
+
+    loadVideoParams();
+  }, [route?.params?.loadVideo]);
 
   const handleModeChange = (mode) => {
     if (mode === 'tts') {
@@ -35,16 +112,197 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
     navigation.navigate('SelectAvatar', { returnScreen: 'AvatarToVideo' });
   };
 
-  const handleCreateVideo = () => {
+  const handleClearText = () => {
+    console.log('=== Clearing Script Text ===');
+    setScriptText('');
+  };
+
+  const saveVideoToHistory = async (videoData) => {
+    try {
+      console.log('=== Saving Video to History ===');
+      const existingHistory = await AsyncStorage.getItem(VIDEO_HISTORY_KEY);
+      const history = existingHistory ? JSON.parse(existingHistory) : [];
+      history.unshift(videoData);
+      await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(history));
+      console.log('✅ Video saved to history. Total videos:', history.length);
+    } catch (error) {
+      console.error('Error saving video to history:', error);
+    }
+  };
+
+  const handleCreateVideo = async () => {
+    console.log('=== Creating Video ===');
+    console.log('Avatar:', selectedAvatar.name);
+    console.log('Script:', scriptText);
+    console.log('Voice:', selectedVoice);
+    console.log('Language:', selectedLanguage);
+    console.log('Output Name:', outputName);
+
     if (!scriptText.trim()) {
-      alert('Please enter your script');
+      Alert.alert('Error', 'Please enter your script');
       return;
     }
-    // TODO: Implement video creation with Fal.ai API
-    alert('Video creation will be implemented with Fal.ai API');
+
+    if (!outputName.trim()) {
+      Alert.alert('Error', 'Please enter a name for your video');
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      setCreationProgress('Generating speech...');
+
+      // Step 1: Generate audio using OpenAI TTS
+      console.log('Step 1: Generating TTS audio...');
+      const ttsResult = await generateTextToSpeech(
+        scriptText,
+        selectedVoice,
+        selectedLanguage
+      );
+
+      if (!ttsResult.success) {
+        throw new Error('Failed to generate speech');
+      }
+
+      console.log('✅ TTS audio generated:', ttsResult.audioUri);
+      
+      // Get translated text for video prompt
+      const translatedText = ttsResult.translatedText || scriptText;
+      console.log('📝 Using translated text for video prompt');
+      console.log('Translated text:', translatedText.substring(0, 100) + '...');
+
+      // Step 2: Upload audio to Fal.ai
+      setCreationProgress('Uploading audio...');
+      console.log('Step 2: Uploading audio to Fal.ai...');
+      const audioUpload = await uploadToFal(
+        ttsResult.audioUri,
+        `audio_${Date.now()}.mp3`
+      );
+
+      if (!audioUpload.success) {
+        throw new Error('Failed to upload audio');
+      }
+
+      console.log('✅ Audio uploaded to Fal.ai storage:', audioUpload.url);
+
+      // Step 3: Upload avatar to Fal.ai storage
+      setCreationProgress('Uploading avatar...');
+      console.log('Step 3: Uploading avatar to Fal.ai storage...');
+      
+      // Get avatar image URI
+      let avatarUri;
+      if (selectedAvatar.image.uri) {
+        // Custom avatar - already has URI
+        console.log('Custom avatar URI:', selectedAvatar.image.uri);
+        avatarUri = selectedAvatar.image.uri;
+      } else {
+        // Default avatar - need to resolve and copy
+        console.log('Default avatar - resolving asset...');
+        
+        try {
+          const resolvedAsset = Image.resolveAssetSource(selectedAvatar.image);
+          console.log('Resolved asset:', resolvedAsset?.uri);
+          
+          if (!resolvedAsset || !resolvedAsset.uri) {
+            throw new Error('Could not resolve default avatar');
+          }
+          
+          // Copy to writable location
+          const fileName = `avatar_default_${Date.now()}.jpg`;
+          const newUri = `${FileSystem.documentDirectory}${fileName}`;
+          
+          await FileSystem.downloadAsync(resolvedAsset.uri, newUri);
+          console.log('✅ Avatar copied to:', newUri);
+          avatarUri = newUri;
+        } catch (assetError) {
+          console.error('Error with default avatar:', assetError);
+          throw new Error('Failed to load default avatar image');
+        }
+      }
+
+      console.log('Avatar URI ready:', avatarUri);
+
+      // Upload to Fal.ai storage
+      const imageUpload = await uploadToFal(
+        avatarUri,
+        `avatar_${Date.now()}.jpg`
+      );
+
+      if (!imageUpload.success) {
+        throw new Error(`Failed to upload avatar: ${imageUpload.error}`);
+      }
+
+      console.log('✅ Avatar uploaded to Fal.ai storage:', imageUpload.url);
+
+      // Step 4: Generate video
+      setCreationProgress('Creating video (this may take a few minutes)...');
+      console.log('Step 4: Generating video with Fal.ai...');
+      console.log('Using translated text as prompt');
+      const videoResult = await generateVideo(
+        imageUpload.url,
+        audioUpload.url,
+        translatedText  // Use translated text instead of original
+      );
+
+      if (!videoResult.success) {
+        throw new Error('Failed to generate video');
+      }
+
+      console.log('✅ Video generated:', videoResult.videoUrl);
+
+      // Step 5: Download video
+      setCreationProgress('Downloading video...');
+      console.log('Step 5: Downloading video...');
+      const fileName = `video_${Date.now()}.mp4`;
+      const downloadResult = await downloadVideo(videoResult.videoUrl, fileName);
+
+      if (!downloadResult.success) {
+        throw new Error('Failed to download video');
+      }
+
+      console.log('✅ Video downloaded:', downloadResult.uri);
+
+      // Step 6: Save to history
+      const videoData = {
+        id: Date.now(),
+        name: outputName,
+        text: scriptText,
+        translatedText: translatedText,  // Save translated text
+        voice: selectedVoice,
+        language: selectedLanguage,
+        avatarName: selectedAvatar.name,
+        videoUri: downloadResult.uri,
+        videoUrl: videoResult.videoUrl,
+        createdAt: new Date().toISOString(),
+      };
+
+      await saveVideoToHistory(videoData);
+
+      // Add notification for video ready
+      addNotification({
+        type: 'video_ready',
+        title: 'Video Ready! 🎉',
+        message: `Your video "${outputName}" has been created successfully and is ready to watch.`,
+        videoData: videoData,
+      });
+
+      setIsCreating(false);
+      setCreationProgress('');
+
+      console.log('✅ Video creation completed successfully!');
+      console.log('📢 Notification sent to user');
+    } catch (error) {
+      console.error('=== Video Creation Error ===');
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      setIsCreating(false);
+      setCreationProgress('');
+      Alert.alert('Error', `Failed to create video: ${error.message}`);
+    }
   };
 
   const handlePastVideos = () => {
+    console.log('=== Navigating to Past Videos ===');
     navigation.navigate('PastVideosList');
   };
 
@@ -90,6 +348,19 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
           </View>
         </View>
 
+        {/* Output Name Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Video Name</Text>
+          <TextInput
+            style={styles.nameInput}
+            placeholder="Enter a name for your video..."
+            placeholderTextColor={COLORS.gray[400]}
+            value={outputName}
+            onChangeText={setOutputName}
+            maxLength={50}
+          />
+        </View>
+
         {/* Script Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Enter Your Script</Text>
@@ -104,7 +375,17 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
               numberOfLines={6}
               maxLength={1000}
               textAlignVertical="top"
+              editable={!isCreating}
             />
+            {scriptText.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButtonInside}
+                onPress={handleClearText}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={20} color={COLORS.gray[400]} />
+              </TouchableOpacity>
+            )}
             <Text style={styles.charCount}>{scriptText.length}/1000</Text>
           </View>
         </View>
@@ -136,17 +417,25 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
 
       {/* Fixed Footer */}
       <View style={styles.footer}>
+        {isCreating && (
+          <View style={styles.progressContainer}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.progressText}>{creationProgress}</Text>
+          </View>
+        )}
         <Button
-          title="Create Video"
+          title={isCreating ? "Creating..." : "Create Video"}
           onPress={handleCreateVideo}
           variant="primary"
           style={styles.createButton}
+          disabled={isCreating}
         />
         <Button
           title="Past Videos"
           onPress={handlePastVideos}
           variant="outline"
           style={styles.pastButton}
+          disabled={isCreating}
         />
       </View>
     </DashboardLayout>
@@ -159,7 +448,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SIZES.padding,
-    paddingBottom: 200,
+    paddingTop: SIZES.padding * 1.5,
+    paddingBottom: 250,
   },
   section: {
     marginBottom: 24,
@@ -224,6 +514,16 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body4,
     color: COLORS.gray[400],
   },
+  nameInput: {
+    backgroundColor: 'rgba(148, 163, 184, 0.05)',
+    borderWidth: 1,
+    borderColor: COLORS.gray[700],
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    fontSize: SIZES.body1,
+    color: COLORS.textLight,
+    height: 48,
+  },
   textAreaContainer: {
     position: 'relative',
   },
@@ -233,10 +533,19 @@ const styles = StyleSheet.create({
     borderColor: COLORS.gray[700],
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
+    paddingTop: 40,
     paddingBottom: 32,
     fontSize: SIZES.body1,
     color: COLORS.textLight,
     minHeight: 150,
+  },
+  clearButtonInside: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 12,
   },
   charCount: {
     position: 'absolute',
@@ -283,6 +592,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(148, 163, 184, 0.1)',
     gap: 12,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  progressText: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[400],
+    flex: 1,
   },
   createButton: {
     width: '100%',
