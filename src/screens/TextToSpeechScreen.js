@@ -35,6 +35,13 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     }
   );
 
+  const [selectedDisplayMode, setSelectedDisplayMode] = useState('gif'); // 'avatar' or 'gif'
+  const [selectedGif, setSelectedGif] = useState({
+    name: 'Man',
+    image: IMAGES.manGif,
+  });
+  const [gifKey, setGifKey] = useState(Date.now()); // Key to remount GIF
+
   const [outputName, setOutputName] = useState('');
   const [textInput, setTextInput] = useState('');
   const [selectedVoice, setSelectedVoice] = useState('nova');
@@ -73,12 +80,13 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       console.log('=== Avatar Updated from Route Params ===');
       console.log('New Avatar:', route.params.selectedAvatar.name);
       setSelectedAvatar(route.params.selectedAvatar);
+      setSelectedDisplayMode('avatar');
     }
   }, [route?.params?.selectedAvatar]);
 
   // Avatar animation when playing
   useEffect(() => {
-    if (isPlaying) {
+    if (isPlaying && selectedDisplayMode === 'avatar') {
       console.log('=== Starting Avatar Animation ===');
       console.log('Avatar speaking animation activated with mouth movements');
       
@@ -241,7 +249,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       
       console.log('✅ All animations stopped and reset');
     }
-  }, [isPlaying]);
+  }, [isPlaying, selectedDisplayMode]);
 
   // Load audio parameters if coming from "Use" button
   useEffect(() => {
@@ -403,6 +411,51 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     navigation.navigate('SelectAvatar', { returnScreen: 'Dashboard' });
   };
 
+  const handleGifSelect = () => {
+    Alert.alert(
+      'Select GIF',
+      'Choose a GIF animation:',
+      [
+        {
+          text: 'Woman',
+          onPress: () => {
+            console.log('=== Selected Woman GIF ===');
+            setSelectedGif({
+              name: 'Woman',
+              image: IMAGES.womanGif,
+            });
+            setSelectedDisplayMode('gif');
+            // Stop any playing audio when changing GIF
+            if (isPlaying) {
+              stopAudio();
+              setIsPlaying(false);
+            }
+          },
+        },
+        {
+          text: 'Man',
+          onPress: () => {
+            console.log('=== Selected Man GIF ===');
+            setSelectedGif({
+              name: 'Man',
+              image: IMAGES.manGif,
+            });
+            setSelectedDisplayMode('gif');
+            // Stop any playing audio when changing GIF
+            if (isPlaying) {
+              stopAudio();
+              setIsPlaying(false);
+            }
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
   const handleCreate = async () => {
     if (!textInput.trim()) {
       Alert.alert('Error', 'Please enter some text');
@@ -450,8 +503,14 @@ const TextToSpeechScreen = ({ navigation, route }) => {
         setIsPlaying(false);
       } else {
         console.log('Starting audio playback');
+        // Reset GIF key to restart animation
+        if (selectedDisplayMode === 'gif') {
+          console.log('=== Restarting GIF animation ===');
+          setGifKey(Date.now());
+        }
         setIsPlaying(true);
         const result = await playAudio(currentAudioUri, () => {
+          console.log('=== Audio playback finished, stopping GIF ===');
           setIsPlaying(false);
         });
         
@@ -555,20 +614,58 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           <Animated.View 
             style={[
               styles.avatarContainer,
-              {
+              selectedDisplayMode === 'avatar' && {
                 transform: [{ scale: avatarScale }],
                 opacity: avatarOpacity,
               }
             ]}
           >
-            <Image
-              source={selectedAvatar.image}
-              style={styles.avatarImage}
-              resizeMode="cover"
-            />
+            {selectedDisplayMode === 'gif' ? (
+              <>
+                {isPlaying ? (
+                  /* GIF playing - key changes on each play to restart animation */
+                  <Image
+                    key={`gif-playing-${gifKey}`}
+                    source={selectedGif.image}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  /* GIF stopped - show preview with overlay */
+                  <>
+                    <View style={styles.gifPreviewContainer}>
+                      <Image
+                        source={selectedGif.image}
+                        style={[styles.avatarImage, styles.gifPreview]}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.gifOverlay}>
+                        {currentAudioUri ? (
+                          <>
+                            <Ionicons name="play-circle" size={80} color="rgba(255,255,255,0.95)" />
+                            <Text style={styles.gifOverlayText}>Press Play</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Ionicons name="musical-notes" size={60} color="rgba(255,255,255,0.8)" />
+                            <Text style={styles.gifOverlayText}>Create Audio First</Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  </>
+                )}
+              </>
+            ) : (
+              <Image
+                source={selectedAvatar.image}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            )}
             
-            {/* Mouth movement overlay */}
-            {isPlaying && (
+            {/* Mouth movement overlay - only for avatar mode */}
+            {isPlaying && selectedDisplayMode === 'avatar' && (
               <Animated.View
                 style={[
                   styles.mouthOverlay,
@@ -609,14 +706,54 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             )}
           </Animated.View>
-          <TouchableOpacity
-            style={styles.avatarSelectButton}
-            onPress={handleAvatarSelect}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="swap-horizontal" size={18} color={COLORS.white} />
-            <Text style={styles.avatarSelectText}>Avatar Select</Text>
-          </TouchableOpacity>
+          
+          {/* Selection Buttons Row */}
+          <View style={styles.selectionButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.modeSelectButton,
+                selectedDisplayMode === 'gif' && styles.modeSelectButtonActive
+              ]}
+              onPress={handleGifSelect}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name="film" 
+                size={18} 
+                color={selectedDisplayMode === 'gif' ? COLORS.primary : COLORS.white} 
+              />
+              <Text style={[
+                styles.modeSelectText,
+                selectedDisplayMode === 'gif' && styles.modeSelectTextActive
+              ]}>
+                Select GIF
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.modeSelectButton,
+                selectedDisplayMode === 'avatar' && styles.modeSelectButtonActive
+              ]}
+              onPress={() => {
+                setSelectedDisplayMode('avatar');
+                handleAvatarSelect();
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name="swap-horizontal" 
+                size={18} 
+                color={selectedDisplayMode === 'avatar' ? COLORS.primary : COLORS.white} 
+              />
+              <Text style={[
+                styles.modeSelectText,
+                selectedDisplayMode === 'avatar' && styles.modeSelectTextActive
+              ]}>
+                Select Avatar
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Input Section */}
@@ -835,6 +972,31 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  gifPreviewContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  gifPreview: {
+    opacity: 0.3,
+  },
+  gifOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  gifOverlayText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+  },
   mouthOverlay: {
     position: 'absolute',
     bottom: '20%',
@@ -869,23 +1031,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.white,
   },
-  avatarSelectButton: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
+  selectionButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  modeSelectButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-    backdropFilter: 'blur(10px)',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  avatarSelectText: {
-    fontSize: SIZES.body3,
-    fontWeight: '500',
+  modeSelectButtonActive: {
+    backgroundColor: 'rgba(19, 127, 236, 0.15)',
+    borderColor: COLORS.primary,
+  },
+  modeSelectText: {
+    fontSize: SIZES.body4,
+    fontWeight: '600',
     color: COLORS.white,
+  },
+  modeSelectTextActive: {
+    color: COLORS.primary,
   },
   avatarPlayButton: {
     position: 'absolute',
