@@ -281,10 +281,11 @@ export const generateTextToSpeech = async (text, voiceId, languageCode) => {
 };
 
 // Speech to Text - Transcribe audio to text
-export const transcribeAudio = async (audioUri) => {
+export const transcribeAudio = async (audioUri, language = 'en') => {
   try {
     console.log('=== OpenAI STT Transcription ===');
     console.log('Audio URI:', audioUri);
+    console.log('Expected language:', language);
 
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not found');
@@ -305,8 +306,12 @@ export const transcribeAudio = async (audioUri) => {
       name: 'recording.mp3',
     });
     formData.append('model', 'whisper-1');
-
-    console.log('Calling OpenAI STT API...');
+    
+    // IMPORTANT: Specify the language to improve accuracy
+    // This tells Whisper what language to expect, dramatically improving results
+    formData.append('language', language);
+    
+    console.log('Calling OpenAI STT API with language hint:', language);
     const response = await axios.post(OPENAI_STT_URL, formData, {
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,

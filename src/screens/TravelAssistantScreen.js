@@ -128,7 +128,9 @@ const TravelAssistantScreen = ({ navigation }) => {
           
           if (result.success) {
             console.log(`${side} transcribing audio...`);
-            const transcription = await transcribeAudio(result.uri);
+            // Use appropriate language for transcription
+            const language = isUser ? userLanguage : counterpartLanguage;
+            const transcription = await transcribeAudio(result.uri, language);
             
             if (transcription.success) {
               console.log(`✅ ${side} transcription successful:`, transcription.text);

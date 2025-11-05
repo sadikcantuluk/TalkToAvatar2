@@ -51,6 +51,14 @@ const modes = [
     description: 'Create engaging animated videos simply by recording your voice.',
     buttonText: 'Explore',
   },
+  {
+    id: 4,
+    route: 'Sualingo',
+    icon: 'language',
+    title: 'Sualingo Mode',
+    description: 'Practice pronunciation and improve your language skills with AI feedback.',
+    buttonText: 'Start Learning',
+  },
 ];
 
 const WelcomeScreen = ({ navigation }) => {

@@ -8,6 +8,7 @@ const modes = [
   { id: 'tts', name: 'TTS Mode', icon: 'mic' },
   { id: 'video', name: 'Video Mode', icon: 'videocam' },
   { id: 'travel', name: 'Travel Assistant', icon: 'navigate' },
+  { id: 'sualingo', name: 'Sualingo Mode', icon: 'language' },
 ];
 
 const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation }) => {
@@ -19,6 +20,19 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
 
   const handleModeSelect = (mode) => {
     setModeModalVisible(false);
+    
+    // Direct navigation based on mode
+    if (mode.id === 'tts') {
+      navigation.navigate('Dashboard');
+    } else if (mode.id === 'video') {
+      navigation.navigate('AvatarToVideo');
+    } else if (mode.id === 'travel') {
+      navigation.navigate('TravelAssistant');
+    } else if (mode.id === 'sualingo') {
+      navigation.navigate('Sualingo');
+    }
+    
+    // Also call onModeChange if provided (for internal state updates)
     if (onModeChange) {
       onModeChange(mode.id);
     }

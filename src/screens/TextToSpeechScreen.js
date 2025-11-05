@@ -537,7 +537,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           
           if (result.success) {
             console.log('Transcribing audio...');
-            const transcription = await transcribeAudio(result.uri);
+            const transcription = await transcribeAudio(result.uri, selectedLanguage);
             
             if (transcription.success) {
               console.log('Transcription successful');
