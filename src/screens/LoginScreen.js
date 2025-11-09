@@ -118,6 +118,10 @@ const LoginScreen = ({ navigation }) => {
             autoCapitalize="none"
             editable={!loading}
             error={emailError}
+            inputStyle={styles.authInput}
+            containerStyle={styles.authInputContainer}
+            labelStyle={styles.authLabel}
+            placeholderTextColor={COLORS.gray[500] || '#718096'}
           />
 
           <Input
@@ -131,6 +135,10 @@ const LoginScreen = ({ navigation }) => {
             secureTextEntry
             editable={!loading}
             error={passwordError}
+            inputStyle={styles.authInput}
+            containerStyle={styles.authInputContainer}
+            labelStyle={styles.authLabel}
+            placeholderTextColor={COLORS.gray[500] || '#718096'}
           />
 
           <TouchableOpacity
@@ -230,6 +238,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.primary || '#4A90E2',
     fontWeight: 'bold',
+  },
+  authInputContainer: {
+    marginBottom: SIZES.padding,
+  },
+  authInput: {
+    color: COLORS.textDark || '#1A202C', // Dark text for better contrast on light backgrounds
+  },
+  authLabel: {
+    color: COLORS.textDark || '#1A202C', // Dark label for better contrast on light backgrounds
   },
 });
 

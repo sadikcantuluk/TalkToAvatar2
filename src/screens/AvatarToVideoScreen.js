@@ -14,15 +14,20 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { COLORS, SIZES, IMAGES } from '../constants';
-import { Button, DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
+import { Button, Input, DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
 import { generateTextToSpeech } from '../services/openAI';
 import { uploadToFal, generateVideo, downloadVideo } from '../services/falAI';
 import { useNotifications } from '../context/NotificationContext';
+import { useAuth, useToast } from '../context';
+import videosAPI from '../services/videosAPI';
+import notificationsAPI from '../services/notificationsAPI';
 
 const VIDEO_HISTORY_KEY = '@video_history';
 
 const AvatarToVideoScreen = ({ navigation, route }) => {
   const { addNotification } = useNotifications();
+  const { token, user } = useAuth();
+  const { success, error: showError } = useToast();
   
   const [selectedAvatar, setSelectedAvatar] = useState({
     name: 'Yusuf',
@@ -120,13 +125,57 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
   const saveVideoToHistory = async (videoData) => {
     try {
       console.log('=== Saving Video to History ===');
+      
+      // Save to local AsyncStorage (fast)
       const existingHistory = await AsyncStorage.getItem(VIDEO_HISTORY_KEY);
       const history = existingHistory ? JSON.parse(existingHistory) : [];
       history.unshift(videoData);
       await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(history));
-      console.log('✅ Video saved to history. Total videos:', history.length);
+      console.log('✅ Video saved to AsyncStorage. Total videos:', history.length);
+      
+      // Save to backend asynchronously (non-blocking)
+      if (token && user) {
+        Promise.resolve().then(async () => {
+          try {
+            console.log('📤 Saving video to backend (background)...');
+            const backendData = {
+              name: videoData.name,
+              text: videoData.text,
+              translated_text: videoData.translatedText,
+              voice_type: videoData.voice,
+              language_code: videoData.language,
+              avatar_name: videoData.avatarName,
+              video_uri: videoData.videoUri,
+              video_url: videoData.videoUrl,
+              metadata: {
+                created_at: videoData.createdAt,
+              },
+            };
+            
+            const response = await videosAPI.create(token, backendData);
+            const backendId = response.video?.id;
+            console.log('✅ Video saved to backend:', backendId);
+            
+            // Update local storage with backend_id for future deletion
+            const saved = await AsyncStorage.getItem(VIDEO_HISTORY_KEY);
+            if (saved && backendId) {
+              const history = JSON.parse(saved);
+              const updatedHistory = history.map(item => {
+                if (item.id === videoData.id) {
+                  return { ...item, backend_id: backendId };
+                }
+                return item;
+              });
+              await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(updatedHistory));
+            }
+          } catch (backendError) {
+            console.error('⚠️ Backend save failed, but local save succeeded:', backendError);
+          }
+        });
+      }
     } catch (error) {
-      console.error('Error saving video to history:', error);
+      console.error('❌ Error saving video to history:', error);
+      showError('Failed to save video');
     }
   };
 
@@ -278,19 +327,21 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
 
       await saveVideoToHistory(videoData);
 
-      // Add notification for video ready
+      // Add notification for video ready (local)
+      // Note: addNotification already handles backend saving internally, so no need for duplicate call
       addNotification({
         type: 'video_ready',
         title: 'Video Ready! 🎉',
         message: `Your video "${outputName}" has been created successfully and is ready to watch.`,
         videoData: videoData,
+        fromBackend: false, // Mark as frontend notification to prevent duplicates
       });
 
       setIsCreating(false);
       setCreationProgress('');
 
       console.log('✅ Video creation completed successfully!');
-      console.log('📢 Notification sent to user');
+      console.log('📢 Notification sent to user and backend');
     } catch (error) {
       console.error('=== Video Creation Error ===');
       console.error('Error message:', error.message);
@@ -350,44 +401,35 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
 
         {/* Output Name Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Video Name</Text>
-          <TextInput
-            style={styles.nameInput}
+          <Input
+            label="Video Name"
             placeholder="Enter a name for your video..."
-            placeholderTextColor={COLORS.gray[400]}
             value={outputName}
             onChangeText={setOutputName}
             maxLength={50}
+            editable={!isCreating}
           />
         </View>
 
         {/* Script Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Enter Your Script</Text>
-          <View style={styles.textAreaContainer}>
-            <TextInput
-              style={styles.textArea}
-              placeholder="Type what you want the avatar to say..."
-              placeholderTextColor={COLORS.gray[400]}
-              value={scriptText}
-              onChangeText={setScriptText}
-              multiline={true}
-              numberOfLines={6}
-              maxLength={1000}
-              textAlignVertical="top"
-              editable={!isCreating}
-            />
-            {scriptText.length > 0 && (
-              <TouchableOpacity
-                style={styles.clearButtonInside}
-                onPress={handleClearText}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close-circle" size={20} color={COLORS.gray[400]} />
-              </TouchableOpacity>
-            )}
-            <Text style={styles.charCount}>{scriptText.length}/1000</Text>
-          </View>
+          <Input
+            label="Enter Your Script"
+            placeholder="Type what you want the avatar to say..."
+            value={scriptText}
+            onChangeText={setScriptText}
+            multiline={true}
+            numberOfLines={6}
+            maxLength={1000}
+            editable={!isCreating}
+            rightIcon={
+              scriptText.length > 0 ? (
+                <TouchableOpacity onPress={handleClearText} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={20} color={COLORS.gray[400]} />
+                </TouchableOpacity>
+              ) : null
+            }
+          />
         </View>
 
         {/* Voice & Language Section */}
@@ -615,4 +657,3 @@ const styles = StyleSheet.create({
 });
 
 export default AvatarToVideoScreen;
-

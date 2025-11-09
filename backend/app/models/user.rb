@@ -12,6 +12,10 @@ class User < ApplicationRecord
   has_many :email_verifications, dependent: :destroy
   has_many :password_resets, dependent: :destroy
   has_many :notifications, dependent: :destroy
+  has_many :custom_avatars, dependent: :destroy
+  has_many :videos, dependent: :destroy
+  has_many :conversations, dependent: :destroy
+  has_many :audios, dependent: :destroy
 
   # Callbacks
   before_create :set_uuid

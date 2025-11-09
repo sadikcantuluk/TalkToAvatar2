@@ -23,6 +23,8 @@ import {
   transcribeAudio,
   translateText,
 } from '../services/openAI';
+import { useAuth, useToast } from '../context';
+import recordingsAPI from '../services/recordingsAPI';
 
 const RECORDINGS_HISTORY_KEY = '@sualingo_recordings_history';
 const CUSTOM_AVATARS_KEY = '@custom_avatars';
@@ -107,6 +109,9 @@ const BASE_SENTENCES = {
 };
 
 const SualingoScreen = ({ navigation, route }) => {
+  const { token, user } = useAuth();
+  const { success, error: showError } = useToast();
+  
   const [selectedAvatar, setSelectedAvatar] = useState({
     name: 'Yusuf',
     image: IMAGES.yusuf,
@@ -417,7 +422,8 @@ const SualingoScreen = ({ navigation, route }) => {
         console.log('🎵 [DEBUG] Creating reference audio...');
         setIsGeneratingAudio(true);
         
-        const result = await generateTextToSpeech(sentence, selectedVoice, selectedLanguage);
+        // Skip translation because sentence is already translated to selectedLanguage
+        const result = await generateTextToSpeech(sentence, selectedVoice, selectedLanguage, true);
         
         setIsGeneratingAudio(false);
         
@@ -533,8 +539,9 @@ const SualingoScreen = ({ navigation, route }) => {
           level: selectedLevel,
           sentence: referenceSentence,
           userTranscript: userText,
-          score: score,
-          audioUri: audioUri,
+          pronunciationScore: score,
+          userAudioUri: userAudioUri,
+          referenceAudioUri: referenceAudioUri,
           language: selectedLanguage,
           voice: selectedVoice,
         });
@@ -618,6 +625,8 @@ const SualingoScreen = ({ navigation, route }) => {
 
   const saveRecordingToHistory = async (recordingData) => {
     try {
+      console.log('=== Saving Recording to History ===');
+      
       const saved = await AsyncStorage.getItem(RECORDINGS_HISTORY_KEY);
       const history = saved ? JSON.parse(saved) : [];
       
@@ -633,11 +642,52 @@ const SualingoScreen = ({ navigation, route }) => {
         createdAt: date.toISOString(),
       };
       
+      // Save to local AsyncStorage (fast)
       const newHistory = [newRecording, ...history];
       await AsyncStorage.setItem(RECORDINGS_HISTORY_KEY, JSON.stringify(newHistory));
-      console.log('Recording saved to history');
+      console.log('✅ Recording saved to AsyncStorage. Total recordings:', newHistory.length);
+      
+      // Show success toast immediately
+      success('Recording saved successfully!');
+      
+      // Save to backend asynchronously (non-blocking)
+      if (token && user) {
+        Promise.resolve().then(async () => {
+          try {
+            console.log('📤 Saving recording to backend (background)...');
+            const backendData = {
+              level: recordingData.level,
+              sentence: recordingData.sentence,
+              user_audio_uri: recordingData.userAudioUri,
+              reference_audio_uri: recordingData.referenceAudioUri,
+              user_transcript: recordingData.userTranscript,
+              pronunciation_score: recordingData.pronunciationScore,
+              language_code: selectedLanguage,
+            };
+            
+            const response = await recordingsAPI.create(token, backendData);
+            console.log('✅ Recording saved to backend:', response.recording.id);
+            
+            // Update local storage with backend_id for future deletion
+            const saved = await AsyncStorage.getItem(RECORDINGS_HISTORY_KEY);
+            if (saved) {
+              const history = JSON.parse(saved);
+              const updatedHistory = history.map(item => {
+                if (item.id === newRecording.id) {
+                  return { ...item, backend_id: response.recording.id };
+                }
+                return item;
+              });
+              await AsyncStorage.setItem(RECORDINGS_HISTORY_KEY, JSON.stringify(updatedHistory));
+            }
+          } catch (backendError) {
+            console.error('⚠️ Backend save failed, but local save succeeded:', backendError);
+          }
+        });
+      }
     } catch (error) {
-      console.error('Error saving recording history:', error);
+      console.error('❌ Error saving recording history:', error);
+      showError('Failed to save recording');
     }
   };
 

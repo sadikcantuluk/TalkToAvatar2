@@ -9,9 +9,9 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Input, Button } from '../components';
+import { Input, Button, ValidationMessage } from '../components';
 import { COLORS, FONTS, SIZES } from '../constants/theme';
-import { useNotifications } from '../context';
+import { useToast } from '../context';
 import authAPI from '../services/authAPI';
 
 const RegisterScreen = ({ navigation }) => {
@@ -27,7 +27,7 @@ const RegisterScreen = ({ navigation }) => {
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   
-  const { showNotification } = useNotifications();
+  const { success, error: showError } = useToast();
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -109,9 +109,8 @@ const RegisterScreen = ({ navigation }) => {
       
       console.log('✅ RegisterScreen: Registration successful!', response);
       
-      showNotification(
-        response.message || 'Registration successful! Please verify your email.',
-        'success'
+      success(
+        response.message || 'Registration successful! Please verify your email.'
       );
       
       // Navigate to email verification screen
@@ -152,7 +151,7 @@ const RegisterScreen = ({ navigation }) => {
         errorMessage = error.message;
       }
       
-      showNotification(errorMessage, 'error');
+      showError(errorMessage);
     } finally {
       setLoading(false);
       console.log('🔵 RegisterScreen: Process completed');
@@ -177,58 +176,82 @@ const RegisterScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.form}>
-          <Input
-            label="Username"
-            placeholder="Enter your username"
-            value={username}
-            onChangeText={(text) => {
-              setUsername(text);
-              setUsernameError('');
-            }}
-            autoCapitalize="none"
-            editable={!loading}
-            error={usernameError}
-          />
+          <View>
+            <Input
+              label="Username"
+              placeholder="Enter your username"
+              value={username}
+              onChangeText={(text) => {
+                setUsername(text);
+                setUsernameError('');
+              }}
+              autoCapitalize="none"
+              editable={!loading}
+              inputStyle={styles.authInput}
+              containerStyle={styles.authInputContainer}
+              labelStyle={styles.authLabel}
+              placeholderTextColor={COLORS.gray[500] || '#718096'}
+            />
+            {usernameError ? <ValidationMessage message={usernameError} type="error" /> : null}
+          </View>
 
-          <Input
-            label="Email"
-            placeholder="Enter your email"
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setEmailError('');
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={!loading}
-            error={emailError}
-          />
+          <View>
+            <Input
+              label="Email"
+              placeholder="Enter your email"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                setEmailError('');
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!loading}
+              inputStyle={styles.authInput}
+              containerStyle={styles.authInputContainer}
+              labelStyle={styles.authLabel}
+              placeholderTextColor={COLORS.gray[500] || '#718096'}
+            />
+            {emailError ? <ValidationMessage message={emailError} type="error" /> : null}
+          </View>
 
-          <Input
-            label="Password"
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              setPasswordError('');
-            }}
-            secureTextEntry
-            editable={!loading}
-            error={passwordError}
-          />
+          <View>
+            <Input
+              label="Password"
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                setPasswordError('');
+              }}
+              secureTextEntry
+              editable={!loading}
+              inputStyle={styles.authInput}
+              containerStyle={styles.authInputContainer}
+              labelStyle={styles.authLabel}
+              placeholderTextColor={COLORS.gray[500] || '#718096'}
+            />
+            {passwordError ? <ValidationMessage message={passwordError} type="error" /> : null}
+          </View>
 
-          <Input
-            label="Confirm Password"
-            placeholder="Confirm your password"
-            value={confirmPassword}
-            onChangeText={(text) => {
-              setConfirmPassword(text);
-              setConfirmPasswordError('');
-            }}
-            secureTextEntry
-            editable={!loading}
-            error={confirmPasswordError}
-          />
+          <View>
+            <Input
+              label="Confirm Password"
+              placeholder="Confirm your password"
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setConfirmPasswordError('');
+              }}
+              secureTextEntry
+              editable={!loading}
+              inputStyle={styles.authInput}
+              containerStyle={styles.authInputContainer}
+              labelStyle={styles.authLabel}
+              placeholderTextColor={COLORS.gray[500] || '#718096'}
+            />
+            {confirmPasswordError ? <ValidationMessage message={confirmPasswordError} type="error" /> : null}
+          </View>
 
           <Text style={styles.passwordHint}>
             Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 digit
@@ -321,6 +344,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.primary || '#4A90E2',
     fontWeight: 'bold',
+  },
+  authInputContainer: {
+    marginBottom: SIZES.padding,
+  },
+  authInput: {
+    color: COLORS.textDark || '#1A202C', // Dark text for better contrast on light backgrounds
+  },
+  authLabel: {
+    color: COLORS.textDark || '#1A202C', // Dark label for better contrast on light backgrounds
   },
 });
 

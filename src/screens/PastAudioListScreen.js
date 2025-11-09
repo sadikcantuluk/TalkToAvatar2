@@ -14,10 +14,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { Header, Button } from '../components';
 import { playAudio, stopAudio } from '../services/openAI';
+import { useAuth } from '../context';
+import audiosAPI from '../services/audiosAPI';
 
 const AUDIO_HISTORY_KEY = '@audio_history';
 
 const PastAudioListScreen = ({ navigation }) => {
+  const { token, user } = useAuth();
   const [audioItems, setAudioItems] = useState([]);
   const [playingId, setPlayingId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,18 +78,35 @@ const PastAudioListScreen = ({ navigation }) => {
               console.log('=== Deleting Audio ===');
               console.log('Audio ID:', id);
               
+              const audioItem = audioItems.find(item => item.id === id);
+              
+              // Delete from local storage
               const updatedItems = audioItems.filter(item => item.id !== id);
               setAudioItems(updatedItems);
               await AsyncStorage.setItem(AUDIO_HISTORY_KEY, JSON.stringify(updatedItems));
               
-              console.log('Audio deleted. Remaining items:', updatedItems.length);
+              console.log('✅ Audio deleted locally. Remaining items:', updatedItems.length);
+              
+              // Delete from backend if authenticated and backend_id exists
+              if (token && user && audioItem?.backend_id) {
+                try {
+                  console.log('📤 Deleting audio from backend...');
+                  await audiosAPI.delete(token, audioItem.backend_id);
+                  console.log('✅ Audio deleted from backend');
+                } catch (backendError) {
+                  console.error('⚠️ Backend delete failed:', backendError);
+                  Alert.alert('Warning', 'Audio deleted locally but failed to delete from server');
+                }
+              } else if (!audioItem?.backend_id) {
+                console.log('⚠️ No backend_id found, audio was only local');
+              }
               
               if (playingId === id) {
                 await stopAudio();
                 setPlayingId(null);
               }
             } catch (error) {
-              console.error('Error deleting audio:', error);
+              console.error('❌ Error deleting audio:', error);
               Alert.alert('Error', 'Failed to delete audio');
             }
           },
@@ -335,4 +355,3 @@ const styles = StyleSheet.create({
 });
 
 export default PastAudioListScreen;
-

@@ -38,6 +38,18 @@ Rails.application.routes.draw do
       # Audio upload and evaluation
       post '/upload_audio', to: 'audio#upload'
       post '/evaluate', to: 'audio#evaluate'
+      
+      # Audios
+      resources :audios, only: [:index, :create, :show, :destroy]
+      
+      # Custom Avatars
+      resources :custom_avatars, only: [:index, :create, :show, :destroy]
+      
+      # Videos
+      resources :videos, only: [:index, :create, :show, :update, :destroy]
+      
+      # Conversations
+      resources :conversations, only: [:index, :create, :show, :destroy]
     end
   end
 

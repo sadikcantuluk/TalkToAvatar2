@@ -18,6 +18,7 @@ const Input = ({
   onRightIconPress,
   containerStyle,
   inputStyle,
+  labelStyle,
   ...props
 }) => {
   const [showPassword, setShowPassword] = useState(false);
@@ -28,7 +29,7 @@ const Input = ({
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, labelStyle]}>{label}</Text>}
       <View style={styles.inputContainer}>
         <TextInput
           style={[
@@ -39,7 +40,7 @@ const Input = ({
             inputStyle,
           ]}
           placeholder={placeholder}
-          placeholderTextColor="#999"
+          placeholderTextColor={COLORS.gray[400] || '#A0AEC0'}
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry && !showPassword}
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: SIZES.body1 || 16,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.textLight || '#F0F0F0',
     marginBottom: 8,
   },
   inputContainer: {
@@ -97,20 +98,22 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 56,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'rgba(148, 163, 184, 0.05)', // Semi-transparent for better dark mode
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: COLORS.gray[700] || 'rgba(148, 163, 184, 0.2)',
     borderRadius: 12,
     paddingHorizontal: 16,
+    paddingTop: 16, // Better vertical alignment for text
     fontSize: SIZES.body1 || 16,
-    color: '#333',
+    color: COLORS.textLight || '#F0F0F0',
   },
   inputWithIcon: {
     paddingRight: 56,
   },
   multilineInput: {
     height: 120,
-    paddingTop: SIZES.padding,
+    paddingTop: 16, // Consistent top padding
+    paddingBottom: 16,
     textAlignVertical: 'top',
   },
   inputError: {

@@ -12,10 +12,13 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { playAudio, stopAudio } from '../services/openAI';
+import { useAuth } from '../context';
+import recordingsAPI from '../services/recordingsAPI';
 
 const RECORDINGS_HISTORY_KEY = '@sualingo_recordings_history';
 
 const PastRecordingsListScreen = ({ navigation }) => {
+  const { token, user } = useAuth();
   const [recordings, setRecordings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [playingId, setPlayingId] = useState(null);
@@ -98,7 +101,10 @@ const PastRecordingsListScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Deleting recording:', recording.id);
+              console.log('=== Deleting Recording ===');
+              console.log('Recording ID:', recording.id);
+              
+              // Delete from local storage
               const newRecordings = recordings.filter(r => r.id !== recording.id);
               setRecordings(newRecordings);
               await AsyncStorage.setItem(
@@ -106,13 +112,28 @@ const PastRecordingsListScreen = ({ navigation }) => {
                 JSON.stringify(newRecordings)
               );
               
+              console.log('✅ Recording deleted locally. Remaining items:', newRecordings.length);
+              
+              // Delete from backend if authenticated and backend_id exists
+              if (token && user && recording?.backend_id) {
+                Promise.resolve().then(async () => {
+                  try {
+                    console.log('📤 Deleting recording from backend (background)...');
+                    await recordingsAPI.delete(token, recording.backend_id);
+                    console.log('✅ Recording deleted from backend');
+                  } catch (backendError) {
+                    console.error('⚠️ Backend delete failed, but local delete succeeded:', backendError);
+                  }
+                });
+              }
+              
               // Stop if currently playing
               if (playingId === recording.id) {
                 await stopAudio();
                 setPlayingId(null);
               }
             } catch (error) {
-              console.error('Delete error:', error);
+              console.error('❌ Delete error:', error);
               Alert.alert('Error', 'Failed to delete recording');
             }
           },
@@ -151,7 +172,7 @@ const PastRecordingsListScreen = ({ navigation }) => {
             { backgroundColor: getScoreColor(item.score) },
           ]}
         >
-          <Text style={styles.scoreText}>{item.score}%</Text>
+          <Text style={styles.scoreText}>{item.pronunciationScore || item.score || 0}%</Text>
         </View>
       </View>
 
@@ -392,4 +413,3 @@ const styles = StyleSheet.create({
 });
 
 export default PastRecordingsListScreen;
-

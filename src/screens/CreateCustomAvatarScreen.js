@@ -15,18 +15,25 @@ import * as MediaLibrary from 'expo-media-library';
 import { COLORS, SIZES } from '../constants';
 import { Header, Button, Input } from '../components';
 import { generateAvatarFromImage } from '../services/googleAI';
+import { useAuth, useToast } from '../context';
+import customAvatarsAPI from '../services/customAvatarsAPI';
+import { compressImageForAPI } from '../utils/imageCompression';
 
 const CreateCustomAvatarScreen = ({ navigation }) => {
+  const { token, user } = useAuth();
+  const { error: showError, warning, info, success } = useToast();
+  
   const [step, setStep] = useState('create'); // 'create', 'loading', 'confirmation'
   const [selectedImage, setSelectedImage] = useState(null);
   const [avatarName, setAvatarName] = useState('');
   const [generatedAvatar, setGeneratedAvatar] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const pickImage = async () => {
     // Request permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      alert('Sorry, we need camera roll permissions to make this work!');
+      showError('We need camera roll permissions to upload photos');
       return;
     }
 
@@ -45,7 +52,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
 
   const handleCreate = async () => {
     if (!selectedImage || !avatarName.trim()) {
-      alert('Please upload a photo and enter an avatar name');
+      showError('Please upload a photo and enter an avatar name');
       return;
     }
 
@@ -57,12 +64,10 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       // Show loading
       setStep('loading');
 
-      // Convert image to base64
-      console.log('Reading image as base64...');
-      const base64 = await FileSystem.readAsStringAsync(selectedImage, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      console.log('Base64 length:', base64.length);
+      // Convert image to base64 with compression (max 1MB)
+      console.log('Reading and compressing image...');
+      const base64 = await compressImageForAPI(selectedImage, 1024, 1024, 0.8, 1000);
+      console.log('Base64 length:', base64.length, 'bytes (', (base64.length / 1024).toFixed(2), 'KB)');
 
       // Call Google AI API to generate avatar
       console.log('Calling Google AI API...');
@@ -82,6 +87,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
           // Fallback: Use the original image
           console.log('Using original image as fallback');
           setGeneratedAvatar(selectedImage);
+          info('AI generation unavailable, using your original image');
         } else {
           // No image available
           console.error('No image returned from API');
@@ -94,14 +100,15 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
         throw new Error('Failed to generate avatar');
       }
     } catch (error) {
-      console.error('Avatar creation error:', error);
+      console.error('❌ Avatar creation error:', error);
       console.error('Error stack:', error.stack);
-      alert('Failed to create avatar. Please try again.');
+      showError('Failed to create avatar. Please try again.');
       setStep('create');
     }
   };
 
   const handleAccept = async () => {
+    setIsLoading(true);
     try {
       console.log('=== Accepting Custom Avatar ===');
       console.log('Avatar Name:', avatarName);
@@ -112,6 +119,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       if (status !== 'granted') {
         console.log('Media library permission denied');
         alert('Permission to access media library is required!');
+        setIsLoading(false);
         return;
       }
 
@@ -154,16 +162,71 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       };
       
       console.log('New Avatar Object:', JSON.stringify(newAvatar));
-      console.log('Navigating to SelectAvatar...');
-
-      // Navigate back to Select Avatar with the new custom avatar
-      navigation.navigate('SelectAvatar', {
-        customAvatar: newAvatar,
-      });
+      
+      // Show loading message for backend save
+      info('Creating your avatar... This may take a moment.');
+      
+      // Save to backend first, then navigate
+      if (token && user) {
+        try {
+          console.log('📤 Saving custom avatar to backend...');
+          // Backend expects: avatar_name and local_uri (not name, image_uri, description, metadata)
+          const backendData = {
+            avatar_name: avatarName,
+            local_uri: savedImageUri,
+          };
+          
+          console.log('📤 Backend data:', { avatar_name: avatarName, local_uri: savedImageUri.substring(0, 50) + '...' });
+          
+          const response = await customAvatarsAPI.create(token, backendData);
+          const backendId = response.avatar?.id || response.custom_avatar?.id;
+          console.log('✅ Custom avatar saved to backend with ID:', backendId);
+          
+          // Add backend_id to avatar object
+          newAvatar.backend_id = backendId;
+          console.log('✅ Backend ID added to avatar:', backendId);
+          
+          // Show success toast after backend save
+          success('Custom avatar created successfully!');
+          
+          console.log('Navigating to SelectAvatar...');
+          
+          // Navigate back to Select Avatar with new custom avatar
+          navigation.navigate('SelectAvatar', {
+            customAvatar: newAvatar,
+          });
+        } catch (backendError) {
+          console.error('⚠️ Backend save failed, saving locally only:', backendError);
+          
+          // Still save locally and navigate even if backend fails
+          newAvatar.backend_id = null;
+          success('Custom avatar created locally!');
+          
+          console.log('Navigating to SelectAvatar...');
+          
+          // Navigate back to Select Avatar with new custom avatar
+          navigation.navigate('SelectAvatar', {
+            customAvatar: newAvatar,
+          });
+        }
+      } else {
+        // No user/token, save locally only
+        newAvatar.backend_id = null;
+        success('Custom avatar created locally!');
+        
+        console.log('Navigating to SelectAvatar...');
+        
+        // Navigate back to Select Avatar with new custom avatar
+        navigation.navigate('SelectAvatar', {
+          customAvatar: newAvatar,
+        });
+      }
     } catch (error) {
-      console.error('Error saving avatar:', error);
+      console.error('❌ Error saving avatar:', error);
       console.error('Error stack:', error.stack);
-      alert('Failed to save avatar. Please try again.');
+      showError('Failed to save avatar. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -275,12 +338,14 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
           onPress={handleAccept}
           variant="primary"
           style={styles.actionButton}
+          disabled={isLoading}
         />
         <Button
           title="Recreate"
           onPress={handleRecreate}
           variant="outline"
           style={styles.actionButton}
+          disabled={isLoading}
         />
       </View>
     </View>
@@ -395,4 +460,3 @@ const styles = StyleSheet.create({
 });
 
 export default CreateCustomAvatarScreen;
-

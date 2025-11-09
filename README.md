@@ -109,6 +109,9 @@ TalkToAvatar/
 │   │   ├── Input.js
 │   │   ├── Header.js
 │   │   ├── AvatarCard.js
+│   │   ├── Toast.js
+│   │   ├── ConfirmDialog.js
+│   │   ├── ValidationMessage.js
 │   │   ├── LanguageSelector.js
 │   │   ├── VoiceSelector.js
 │   │   ├── DashboardLayout.js
@@ -116,30 +119,72 @@ TalkToAvatar/
 │   ├── screens/                 # Uygulama ekranları
 │   │   ├── SplashScreen.js
 │   │   ├── WelcomeScreen.js
+│   │   ├── LoginScreen.js
+│   │   ├── RegisterScreen.js
+│   │   ├── ProfileScreen.js
 │   │   ├── SelectAvatarScreen.js
 │   │   ├── CreateCustomAvatarScreen.js
 │   │   ├── TextToSpeechScreen.js
 │   │   ├── AvatarToVideoScreen.js
+│   │   ├── SualingoScreen.js
 │   │   ├── TravelAssistantScreen.js
 │   │   ├── PastAudioListScreen.js
 │   │   ├── PastVideosListScreen.js
 │   │   └── VideoViewingScreen.js
 │   ├── services/               # API servisleri
+│   │   ├── apiClient.js       # Centralized Axios instance
 │   │   ├── openAI.js          # OpenAI TTS/STT
 │   │   ├── falAI.js           # Fal.ai Video
-│   │   └── googleAI.js        # Google Gemini
+│   │   ├── googleAI.js        # Google Gemini
+│   │   ├── authAPI.js         # Authentication API
+│   │   ├── audiosAPI.js       # Audios API
+│   │   ├── videosAPI.js       # Videos API
+│   │   └── customAvatarsAPI.js # Custom Avatars API
 │   ├── context/                # React Context API
+│   │   ├── AuthContext.js
+│   │   ├── ToastContext.js
 │   │   ├── NotificationContext.js
 │   │   └── index.js
 │   ├── navigation/             # Navigasyon yapılandırması
 │   │   └── AppNavigator.js
-│   └── constants/              # Sabitler
-│       ├── theme.js
-│       ├── images.js
-│       └── index.js
+│   ├── constants/              # Sabitler
+│   │   ├── theme.js
+│   │   ├── images.js
+│   │   └── index.js
+│   └── utils/                  # Utility fonksiyonları
+│       └── notificationMessages.js
+├── backend/                     # Ruby on Rails backend
+│   ├── app/
+│   │   ├── controllers/        # API Controllers
+│   │   ├── models/             # Database Models
+│   │   ├── mailers/            # Email mailers
+│   │   └── views/              # Email templates
+│   ├── config/                 # Rails configuration
+│   │   ├── database.yml
+│   │   ├── routes.rb
+│   │   └── initializers/
+│   ├── db/                     # Database migrations & seeds
+│   │   ├── migrate/
+│   │   ├── schema.rb
+│   │   └── seeds.rb
+│   └── Gemfile                 # Ruby dependencies
+├── database/                    # SQL scripts & schema
+│   ├── database_schema.sql
+│   ├── insert_sentence_translations.sql
+│   ├── supabase_notifications_setup.sql
+│   └── supabase_security_fixes.sql
+├── docs/                        # Documentation
+│   ├── BACKEND_SETUP_GUIDE.md
+│   ├── BackendDatabaseEntegrasyonDetail.md
+│   ├── Details.md
+│   ├── falai.md
+│   ├── talkToAvatariyilestirme.md
+│   └── ... (other documentation files)
 ├── assets/                      # Görseller ve statik dosyalar
 │   ├── logo.png
 │   ├── icon.png
+│   ├── man.gif
+│   ├── woman.gif
 │   ├── yusuf.jpg
 │   └── eda.jpg
 ├── App.js                       # Ana uygulama giriş noktası
@@ -279,11 +324,30 @@ npm start -- --reset-cache
 
 - Expo SDK 54 kullanılmaktadır
 - React Navigation v7 ile navigasyon yönetimi
-- Context API ile state management
+- Context API ile state management (Auth, Toast, Notifications)
 - AsyncStorage ile yerel veri saklama
+- Ruby on Rails backend (API v1)
+- Supabase PostgreSQL database
 - Dark theme optimize edilmiş
 - Cross-platform (iOS, Android, Web)
 - Responsive tasarım
+
+## 📚 Dokümantasyon
+
+Detaylı dokümantasyon için `docs/` klasörüne bakın:
+- [Backend Setup Guide](docs/BACKEND_SETUP_GUIDE.md) - Rails backend kurulum ve yapılandırma
+- [Database Integration Details](docs/BackendDatabaseEntegrasyonDetail.md) - Supabase entegrasyon detayları
+- [Project Details](docs/Details.md) - Proje detayları ve özellikler
+- [Fal.ai Integration](docs/falai.md) - Video API entegrasyonu
+- [Improvement Plan](docs/talkToAvatariyilestirme.md) - Proje iyileştirme planı
+
+## 🗄️ Database
+
+SQL script'leri `database/` klasöründe bulunmaktadır:
+- `database_schema.sql` - Supabase database şeması
+- `insert_sentence_translations.sql` - Sualingo cümle çevirileri
+- `supabase_notifications_setup.sql` - Bildirim sistemi kurulumu
+- `supabase_security_fixes.sql` - Güvenlik yapılandırması
 
 ## 🔐 Güvenlik
 

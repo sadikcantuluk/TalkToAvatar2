@@ -10,6 +10,7 @@ import {
   Alert,
   Animated,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES, IMAGES } from '../constants';
@@ -22,12 +23,16 @@ import {
   stopRecording,
   transcribeAudio,
 } from '../services/openAI';
+import { useAuth, useToast } from '../context';
+import audiosAPI from '../services/audiosAPI';
 
 const AUDIO_HISTORY_KEY = '@audio_history';
 const TEXT_HISTORY_KEY = '@text_history';
 const CUSTOM_AVATARS_KEY = '@custom_avatars';
 
 const TextToSpeechScreen = ({ navigation, route }) => {
+  const { token, user } = useAuth();
+  const { success, error: showError } = useToast();
   const [selectedAvatar, setSelectedAvatar] = useState(
     route?.params?.selectedAvatar || {
       name: 'Yusuf',
@@ -74,15 +79,25 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // Update avatar when route params change
-  useEffect(() => {
-    if (route?.params?.selectedAvatar) {
-      console.log('=== Avatar Updated from Route Params ===');
-      console.log('New Avatar:', route.params.selectedAvatar.name);
-      setSelectedAvatar(route.params.selectedAvatar);
-      setSelectedDisplayMode('avatar');
-    }
-  }, [route?.params?.selectedAvatar]);
+  // Handle avatar selection from SelectAvatarScreen
+  // Only update the avatar, preserve all other state (inputs, audio, etc.)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (route?.params?.selectedAvatar) {
+        console.log('=== Avatar Changed in TTS ===');
+        console.log('New avatar:', route.params.selectedAvatar.name);
+        console.log('Preserving state: textInput, outputName, voice, language, audioUri');
+        
+        setSelectedAvatar(route.params.selectedAvatar);
+        setSelectedDisplayMode('avatar'); // Switch to avatar display mode
+        
+        console.log('✅ Avatar updated, all state preserved');
+        
+        // Clear the param to prevent re-applying on next focus
+        navigation.setParams({ selectedAvatar: undefined });
+      }
+    }, [route?.params?.selectedAvatar])
+  );
 
   // Avatar animation when playing
   useEffect(() => {
@@ -372,16 +387,14 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     }
   };
 
-  // Save audio to history
+  // Save audio to history (optimized for async backend save)
   const saveAudioToHistory = async (audioData) => {
     try {
       console.log('=== Saving Audio to History ===');
-      const saved = await AsyncStorage.getItem(AUDIO_HISTORY_KEY);
-      const history = saved ? JSON.parse(saved) : [];
       
       const newAudio = {
         id: Date.now().toString(),
-        name: outputName || `Audio ${history.length + 1}`,
+        name: outputName || `Audio ${audioHistory.length + 1}`,
         text: textInput,
         translatedText: audioData.translatedText,
         audioUri: audioData.audioUri,
@@ -391,11 +404,58 @@ const TextToSpeechScreen = ({ navigation, route }) => {
         createdAt: new Date().toISOString(),
       };
       
+      // Save to local AsyncStorage (fast - blocks UI)
+      const saved = await AsyncStorage.getItem(AUDIO_HISTORY_KEY);
+      const history = saved ? JSON.parse(saved) : [];
       const newHistory = [newAudio, ...history];
       await AsyncStorage.setItem(AUDIO_HISTORY_KEY, JSON.stringify(newHistory));
-      console.log('Audio saved to history. Total audios:', newHistory.length);
+      console.log('✅ Audio saved to AsyncStorage. Total audios:', newHistory.length);
+      
+      // Show success toast immediately after local save (instant feedback)
+      success('Audio created and saved successfully!');
+      
+      // Save to backend/Supabase asynchronously (non-blocking)
+      if (token && user) {
+        // Use Promise.resolve().then() to defer backend save
+        // This ensures UI doesn't wait for backend response
+        Promise.resolve().then(async () => {
+          try {
+            console.log('📤 Saving audio to backend (background)...');
+            const backendData = {
+              local_uri: audioData.audioUri,
+              text: textInput,
+              translated_text: audioData.translatedText,
+              voice_type: selectedVoice,
+              language_code: selectedLanguage,
+              avatar_name: selectedAvatar.name,
+            };
+            
+            const response = await audiosAPI.create(token, backendData);
+            console.log('✅ Audio saved to backend:', response.audio.id);
+            
+            // Update local storage with backend_id for future deletion
+            const saved = await AsyncStorage.getItem(AUDIO_HISTORY_KEY);
+            if (saved) {
+              const history = JSON.parse(saved);
+              const updatedHistory = history.map(item => {
+                if (item.id === newAudio.id) {
+                  return { ...item, backend_id: response.audio.id };
+                }
+                return item;
+              });
+              await AsyncStorage.setItem(AUDIO_HISTORY_KEY, JSON.stringify(updatedHistory));
+            }
+            // No toast here - already shown after local save
+          } catch (backendError) {
+            console.error('⚠️ Backend save failed, but local save succeeded:', backendError);
+            // Could implement queue retry here if needed
+            // For now, local save is sufficient
+          }
+        });
+      }
     } catch (error) {
-      console.error('Error saving audio history:', error);
+      console.error('❌ Error saving audio history:', error);
+      showError('Failed to save audio');
     }
   };
 
@@ -408,7 +468,18 @@ const TextToSpeechScreen = ({ navigation, route }) => {
   };
 
   const handleAvatarSelect = () => {
-    navigation.navigate('SelectAvatar', { returnScreen: 'Dashboard' });
+    console.log('=== Navigating to Select Avatar (State Preservation) ===');
+    console.log('Current state will be preserved:');
+    console.log('- textInput:', textInput?.substring(0, 50) + '...');
+    console.log('- outputName:', outputName);
+    console.log('- voice:', selectedVoice);
+    console.log('- language:', selectedLanguage);
+    console.log('- audioUri:', currentAudioUri ? 'Available' : 'None');
+    
+    navigation.navigate('SelectAvatar', { 
+      returnScreen: 'Dashboard',
+      preserveState: true // Indicate state should be preserved
+    });
   };
 
   const handleGifSelect = () => {
@@ -477,8 +548,6 @@ const TextToSpeechScreen = ({ navigation, route }) => {
         // Save to history
         await saveTextToHistory(textInput);
         await saveAudioToHistory(result);
-        
-        Alert.alert('Success', 'Audio created successfully! Press the play button to listen.');
       } else {
         throw new Error(result.error);
       }

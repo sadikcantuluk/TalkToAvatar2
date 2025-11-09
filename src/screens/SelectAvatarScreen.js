@@ -12,6 +12,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, IMAGES } from '../constants';
 import { Header, Button } from '../components';
+import { useAuth } from '../context';
+import customAvatarsAPI from '../services/customAvatarsAPI';
 
 const CUSTOM_AVATARS_KEY = '@custom_avatars';
 
@@ -33,6 +35,7 @@ const defaultAvatars = [
 ];
 
 const SelectAvatarScreen = ({ navigation, route }) => {
+  const { token, user } = useAuth();
   const [selectedAvatar, setSelectedAvatar] = useState('yusuf');
   const [customAvatars, setCustomAvatars] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,16 +153,33 @@ const SelectAvatarScreen = ({ navigation, route }) => {
     navigation.navigate('CreateCustomAvatar');
   };
 
-  const handleDeleteAvatar = (avatarId) => {
+  const handleDeleteAvatar = async (avatarId) => {
     console.log('=== Deleting Custom Avatar ===');
     console.log('Avatar ID to delete:', avatarId);
     console.log('Current avatars count:', customAvatars.length);
     
+    const avatarToDelete = customAvatars.find(a => a.id === avatarId);
+    
+    // Delete from local storage
     const updatedAvatars = customAvatars.filter(a => a.id !== avatarId);
     console.log('Avatars after deletion:', updatedAvatars.length);
     
     setCustomAvatars(updatedAvatars);
     saveCustomAvatars(updatedAvatars);
+    
+    // Delete from backend if authenticated and backend_id exists
+    if (token && user && avatarToDelete?.backend_id) {
+      try {
+        console.log('📤 Deleting custom avatar from backend...');
+        await customAvatarsAPI.delete(token, avatarToDelete.backend_id);
+        console.log('✅ Custom avatar deleted from backend');
+      } catch (backendError) {
+        console.error('⚠️ Backend delete failed:', backendError);
+        Alert.alert('Warning', 'Avatar deleted locally but failed to delete from server');
+      }
+    } else if (!avatarToDelete?.backend_id) {
+      console.log('⚠️ No backend_id found, avatar was only local');
+    }
     
     if (selectedAvatar === avatarId) {
       console.log('Deleted avatar was selected, switching to default');
@@ -413,4 +433,3 @@ const styles = StyleSheet.create({
 });
 
 export default SelectAvatarScreen;
-

@@ -1,6 +1,9 @@
 class Notification < ApplicationRecord
   belongs_to :user
 
+  # Disable STI (Single Table Inheritance) to use 'type' column for notification type
+  self.inheritance_column = nil
+
   # Validations
   validates :title, presence: true, length: { maximum: 255 }
   validates :message, presence: true

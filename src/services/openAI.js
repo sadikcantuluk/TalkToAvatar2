@@ -187,30 +187,37 @@ export const generateSpeechOnly = async (text, voiceId) => {
 };
 
 // Text to Speech - Generate audio from text
-export const generateTextToSpeech = async (text, voiceId, languageCode) => {
+export const generateTextToSpeech = async (text, voiceId, languageCode, skipTranslation = false) => {
   try {
     console.log('=== OpenAI TTS Generation ===');
     console.log('Text length:', text.length);
     console.log('Voice ID:', voiceId);
     console.log('Language:', languageCode);
+    console.log('Skip translation:', skipTranslation);
 
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not found');
     }
 
-    // Always translate text to selected language
-    // This ensures the text is in the correct language regardless of input
+    // Translate text to selected language (unless skipTranslation is true)
+    // skipTranslation is useful when text is already in the target language (e.g., Sualingo)
     let finalText = text;
-    console.log('🌐 Translating text to:', languageNames[languageCode] || languageCode);
-    console.log('Original text preview:', text.substring(0, 100) + '...');
     
-    const translateResult = await translateText(text, languageCode);
-    if (translateResult.success) {
-      finalText = translateResult.translatedText;
-      console.log('✅ Translation successful. Translated text length:', finalText.length);
-      console.log('Translated text preview:', finalText.substring(0, 100) + '...');
+    if (!skipTranslation) {
+      console.log('🌐 Translating text to:', languageNames[languageCode] || languageCode);
+      console.log('Original text preview:', text.substring(0, 100) + '...');
+      
+      const translateResult = await translateText(text, languageCode);
+      if (translateResult.success) {
+        finalText = translateResult.translatedText;
+        console.log('✅ Translation successful. Translated text length:', finalText.length);
+        console.log('Translated text preview:', finalText.substring(0, 100) + '...');
+      } else {
+        console.warn('⚠️  Translation failed, using original text');
+        finalText = text;
+      }
     } else {
-      console.warn('⚠️  Translation failed, using original text');
+      console.log('⏭️  Skipping translation (text already in target language)');
       finalText = text;
     }
 
@@ -222,11 +229,19 @@ export const generateTextToSpeech = async (text, voiceId, languageCode) => {
     });
 
     console.log('Calling OpenAI TTS API...');
+    console.log('Language for TTS:', languageCode);
+    console.log('Text to speak:', finalText.substring(0, 100) + '...');
+    
+    // Use the user's selected voice regardless of language
+    // OpenAI TTS can handle multiple languages with any voice
+    let selectedVoice = voiceId;
+    console.log(`🔧 Using user-selected voice '${selectedVoice}' for language '${languageCode}'`);
+    
     const response = await axios.post(
       OPENAI_TTS_URL,
       {
         model: 'tts-1-hd', // High quality model
-        voice: voiceId,
+        voice: selectedVoice,
         input: finalText,
         speed: 1.0,
       },
@@ -556,4 +571,3 @@ export default {
   startRecording,
   stopRecording,
 };
-

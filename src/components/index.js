@@ -6,4 +6,7 @@ export { default as LoadingDots } from './LoadingDots';
 export { default as DashboardLayout } from './DashboardLayout';
 export { default as LanguageSelector } from './LanguageSelector';
 export { default as VoiceSelector } from './VoiceSelector';
+export { default as Toast } from './Toast';
+export { default as ConfirmDialog } from './ConfirmDialog';
+export { default as ValidationMessage } from './ValidationMessage';
 

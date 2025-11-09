@@ -4,10 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { Header, Button } from '../components';
+import { useAuth } from '../context';
+import videosAPI from '../services/videosAPI';
 
 const VIDEO_HISTORY_KEY = '@video_history';
 
 const PastVideosListScreen = ({ navigation }) => {
+  const { token, user } = useAuth();
   const [videoItems, setVideoItems] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -57,12 +60,29 @@ const PastVideosListScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('=== Deleting Video ===');
+              const videoItem = videoItems.find(item => item.id === id);
+              
+              // Delete from local storage
               const updatedItems = videoItems.filter(item => item.id !== id);
               await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(updatedItems));
               setVideoItems(updatedItems);
-              console.log('Video deleted. Remaining items:', updatedItems.length);
+              console.log('✅ Video deleted locally. Remaining items:', updatedItems.length);
+              
+              // Delete from backend if authenticated and backend_id exists
+              if (token && user && videoItem?.backend_id) {
+                Promise.resolve().then(async () => {
+                  try {
+                    console.log('📤 Deleting video from backend (background)...');
+                    await videosAPI.delete(token, videoItem.backend_id);
+                    console.log('✅ Video deleted from backend');
+                  } catch (backendError) {
+                    console.error('⚠️ Backend delete failed, but local delete succeeded:', backendError);
+                  }
+                });
+              }
             } catch (error) {
-              console.error('Error deleting video:', error);
+              console.error('❌ Error deleting video:', error);
               Alert.alert('Error', 'Failed to delete video');
             }
           },

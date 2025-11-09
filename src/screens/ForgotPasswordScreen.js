@@ -75,6 +75,9 @@ const ForgotPasswordScreen = ({ navigation }) => {
             keyboardType="email-address"
             autoCapitalize="none"
             editable={!loading}
+            labelStyle={styles.authLabel}
+            inputStyle={styles.authInput}
+            placeholderTextColor={COLORS.gray[500] || '#718096'}
           />
 
           <Button
@@ -192,6 +195,12 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: 14,
     color: COLORS.textSecondary || '#999',
+  },
+  authLabel: {
+    color: COLORS.textDark || '#1A202C', // Dark label for better contrast on light backgrounds
+  },
+  authInput: {
+    color: COLORS.textDark || '#1A202C', // Dark text for better contrast on light backgrounds
   },
 });
 

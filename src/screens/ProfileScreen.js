@@ -9,15 +9,14 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button } from '../components';
+import { Input, Button, ConfirmDialog, ValidationMessage } from '../components';
 import { COLORS, FONTS, SIZES } from '../constants/theme';
-import { useAuth } from '../context';
-import { useNotifications } from '../context';
+import { useAuth, useToast } from '../context';
 import authAPI from '../services/authAPI';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, token, logout, updateUser } = useAuth();
-  const { showNotification } = useNotifications();
+  const { success, error: showError, info } = useToast();
   
   const [username, setUsername] = useState(user?.username || '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -26,6 +25,10 @@ const ProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  
+  // Dialog states
+  const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
   const validatePassword = (password) => {
     const hasUpperCase = /[A-Z]/.test(password);
@@ -38,17 +41,17 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleUpdateUsername = async () => {
     if (!username.trim()) {
-      showNotification('Username cannot be empty', 'error');
+      showError('Username cannot be empty');
       return;
     }
 
     if (username.trim().length < 3) {
-      showNotification('Username must be at least 3 characters', 'error');
+      showError('Username must be at least 3 characters');
       return;
     }
 
     if (username.trim() === user?.username) {
-      showNotification('Username is the same', 'info');
+      info('Username is the same');
       setEditingUsername(false);
       return;
     }
@@ -58,17 +61,14 @@ const ProfileScreen = ({ navigation }) => {
       const response = await authAPI.updateProfile(token, username.trim());
       
       await updateUser(response.user);
-      showNotification(
-        response.message || 'Username updated successfully!',
-        'success'
-      );
+      success(response.message || 'Username updated successfully!');
       setEditingUsername(false);
     } catch (error) {
       console.error('Update username error:', error);
       const errorMessage = error.errors
         ? error.errors.join(', ')
         : error.error || 'Failed to update username';
-      showNotification(errorMessage, 'error');
+      showError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -76,20 +76,17 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      showNotification('Please fill in all password fields', 'error');
+      showError('Please fill in all password fields');
       return;
     }
 
     if (!validatePassword(newPassword)) {
-      showNotification(
-        'Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 digit',
-        'error'
-      );
+      showError('Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 digit');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showNotification('New passwords do not match', 'error');
+      showError('New passwords do not match');
       return;
     }
 
@@ -101,10 +98,7 @@ const ProfileScreen = ({ navigation }) => {
         newPassword
       );
       
-      showNotification(
-        response.message || 'Password changed successfully!',
-        'success'
-      );
+      success(response.message || 'Password changed successfully!');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -114,78 +108,40 @@ const ProfileScreen = ({ navigation }) => {
       const errorMessage = error.errors
         ? error.errors.join(', ')
         : error.error || 'Failed to change password';
-      showNotification(errorMessage, 'error');
+      showError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            showNotification('Logged out successfully', 'success');
-            navigation.replace('Login');
-          },
-        },
-      ],
-      { cancelable: true }
-    );
+    setLogoutDialogVisible(true);
+  };
+  
+  const confirmLogout = async () => {
+    await logout();
+    success('Logged out successfully');
+    navigation.replace('Login');
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you absolutely sure? This action cannot be undone. All your data will be permanently deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            // Second confirmation
-            Alert.alert(
-              'Final Confirmation',
-              'This will permanently delete your account and all associated data including recordings, videos, and custom avatars.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete Forever',
-                  style: 'destructive',
-                  onPress: async () => {
-                    setLoading(true);
-                    try {
-                      await authAPI.deleteAccount(token);
-                      showNotification('Account deleted successfully', 'success');
-                      await logout();
-                      navigation.replace('Login');
-                    } catch (error) {
-                      console.error('Delete account error:', error);
-                      showNotification(
-                        error.error || 'Failed to delete account. Please try again.',
-                        'error'
-                      );
-                    } finally {
-                      setLoading(false);
-                    }
-                  },
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
+    setDeleteDialogVisible(true);
+  };
+  
+  const confirmDeleteAccount = async () => {
+    setLoading(true);
+    try {
+      await authAPI.deleteAccount(token);
+      success('Account deleted successfully');
+      await logout();
+      navigation.replace('Login');
+    } catch (error) {
+      console.error('Delete account error:', error);
+      showError(error.error || 'Failed to delete account. Please try again.');
+    } finally {
+      setLoading(false);
+      setDeleteDialogVisible(false);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -364,6 +320,31 @@ const ProfileScreen = ({ navigation }) => {
           style={styles.loader}
         />
       )}
+      
+      {/* Logout Confirmation Dialog */}
+      <ConfirmDialog
+        visible={logoutDialogVisible}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        type="warning"
+        confirmText="Logout"
+        cancelText="Cancel"
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutDialogVisible(false)}
+      />
+      
+      {/* Delete Account Confirmation Dialog */}
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete Account"
+        message="This action cannot be undone. All your data including recordings, videos, and custom avatars will be permanently deleted."
+        type="danger"
+        confirmText="Delete Forever"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteAccount}
+        onCancel={() => setDeleteDialogVisible(false)}
+        loading={loading}
+      />
     </ScrollView>
   );
 };
