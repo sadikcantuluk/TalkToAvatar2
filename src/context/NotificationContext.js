@@ -89,6 +89,25 @@ export const NotificationProvider = ({ children }) => {
     saveNotifications([]);
   };
 
+  // Show notification with type (success, error, info)
+  const showNotification = (message, type = 'info') => {
+    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info';
+    addNotification({
+      title,
+      message,
+      type,
+    });
+    
+    // Also log to console for debugging
+    if (type === 'error') {
+      console.error('❌ Notification:', message);
+    } else if (type === 'success') {
+      console.log('✅ Notification:', message);
+    } else {
+      console.log('ℹ️ Notification:', message);
+    }
+  };
+
   const value = {
     notifications,
     unreadCount,
@@ -97,6 +116,7 @@ export const NotificationProvider = ({ children }) => {
     markAllAsRead,
     deleteNotification,
     clearAll,
+    showNotification,
   };
 
   return (

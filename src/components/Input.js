@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, SIZES } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,12 @@ const Input = ({
   inputStyle,
   ...props
 }) => {
+  const [showPassword, setShowPassword] = useState(false);
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
@@ -29,20 +35,34 @@ const Input = ({
             styles.input,
             multiline && styles.multilineInput,
             error && styles.inputError,
+            (secureTextEntry || rightIcon) && styles.inputWithIcon,
             inputStyle,
           ]}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.gray[400]}
+          placeholderTextColor="#999"
           value={value}
           onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
+          secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
           multiline={multiline}
           numberOfLines={multiline ? numberOfLines : 1}
           maxLength={maxLength}
           {...props}
         />
-        {rightIcon && (
+        {secureTextEntry && (
+          <TouchableOpacity 
+            style={styles.rightIconContainer} 
+            onPress={togglePasswordVisibility}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+              size={24} 
+              color="#666" 
+            />
+          </TouchableOpacity>
+        )}
+        {rightIcon && !secureTextEntry && (
           <TouchableOpacity 
             style={styles.rightIconContainer} 
             onPress={onRightIconPress}
@@ -67,9 +87,9 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.padding,
   },
   label: {
-    fontSize: SIZES.body1,
-    fontWeight: '500',
-    color: COLORS.textLight,
+    fontSize: SIZES.body1 || 16,
+    fontWeight: '600',
+    color: '#333',
     marginBottom: 8,
   },
   inputContainer: {
@@ -77,13 +97,16 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 56,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#F5F5F5',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.padding,
-    fontSize: SIZES.body1,
-    color: COLORS.textLight,
+    borderColor: '#DDD',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: SIZES.body1 || 16,
+    color: '#333',
+  },
+  inputWithIcon: {
+    paddingRight: 56,
   },
   multilineInput: {
     height: 120,
@@ -95,13 +118,12 @@ const styles = StyleSheet.create({
   },
   rightIconContainer: {
     position: 'absolute',
-    right: 12,
-    bottom: 12,
+    right: 8,
+    top: 8,
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 20,
   },
   charCount: {

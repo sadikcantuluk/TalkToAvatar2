@@ -1,4 +1,10 @@
 export { default as SplashScreen } from './SplashScreen';
+export { default as LoginScreen } from './LoginScreen';
+export { default as RegisterScreen } from './RegisterScreen';
+export { default as EmailVerificationScreen } from './EmailVerificationScreen';
+export { default as ForgotPasswordScreen } from './ForgotPasswordScreen';
+export { default as ResetPasswordScreen } from './ResetPasswordScreen';
+export { default as ProfileScreen } from './ProfileScreen';
 export { default as WelcomeScreen } from './WelcomeScreen';
 export { default as SelectAvatarScreen } from './SelectAvatarScreen';
 export { default as CreateCustomAvatarScreen } from './CreateCustomAvatarScreen';

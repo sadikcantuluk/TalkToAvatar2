@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, ScrollView, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from 'react-native-gesture-handler';
 import { COLORS, SIZES } from '../constants';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -14,7 +15,8 @@ const modes = [
 const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation }) => {
   const [modeModalVisible, setModeModalVisible] = useState(false);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const swipeableRefs = useRef({});
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAll } = useNotifications();
 
   const currentModeData = modes.find(m => m.id === currentMode) || modes[0];
 
@@ -95,7 +97,12 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
           <Ionicons name="chevron-down" size={20} color={COLORS.textLight} />
         </TouchableOpacity>
         
-        <View style={styles.placeholder} />
+        <TouchableOpacity 
+          style={styles.profileButton}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <Ionicons name="person-circle-outline" size={24} color={COLORS.textLight} />
+        </TouchableOpacity>
       </View>
 
       {/* Content */}
@@ -162,13 +169,29 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Notifications</Text>
               <View style={styles.headerActions}>
-                {unreadCount > 0 && (
-                  <TouchableOpacity 
-                    onPress={markAllAsRead}
-                    style={styles.markAllButton}
-                  >
-                    <Text style={styles.markAllText}>Mark all read</Text>
-                  </TouchableOpacity>
+                {notifications.length > 0 && (
+                  <>
+                    {unreadCount > 0 && (
+                      <TouchableOpacity 
+                        onPress={markAllAsRead}
+                        style={styles.markAllButton}
+                      >
+                        <Ionicons name="checkmark-done" size={18} color={COLORS.primary} />
+                        <Text style={styles.markAllText}>Mark all</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity 
+                      onPress={() => {
+                        if (notifications.length > 0) {
+                          clearAll();
+                        }
+                      }}
+                      style={[styles.markAllButton, styles.clearAllButton]}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      <Text style={[styles.markAllText, styles.clearAllText]}>Clear all</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
                 <TouchableOpacity onPress={() => setNotificationModalVisible(false)}>
                   <Ionicons name="close" size={24} color={COLORS.textLight} />
@@ -185,46 +208,78 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
             ) : (
               <ScrollView style={styles.notificationList}>
                 {notifications.map((notification) => (
-                  <TouchableOpacity
+                  <Swipeable
                     key={notification.id}
-                    style={[
-                      styles.notificationItem,
-                      !notification.read && styles.notificationItemUnread,
-                    ]}
-                    onPress={() => handleNotificationPress(notification)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[
-                      styles.notificationIcon,
-                      !notification.read && styles.notificationIconUnread,
-                    ]}>
-                      <Ionicons 
-                        name={notification.type === 'video_ready' ? 'videocam' : 'information-circle'} 
-                        size={24} 
-                        color={!notification.read ? COLORS.primary : COLORS.gray[500]} 
-                      />
-                    </View>
-                    <View style={styles.notificationContent}>
-                      <Text style={[
-                        styles.notificationTitle,
-                        !notification.read && styles.notificationTitleUnread,
-                      ]}>
-                        {notification.title}
-                      </Text>
-                      <Text style={[
-                        styles.notificationMessage,
-                        !notification.read && styles.notificationMessageUnread,
-                      ]}>
-                        {notification.message}
-                      </Text>
-                      <Text style={styles.notificationTime}>
-                        {formatTimeAgo(notification.createdAt)}
-                      </Text>
-                    </View>
-                    {!notification.read && (
-                      <View style={styles.unreadDot} />
+                    ref={ref => swipeableRefs.current[notification.id] = ref}
+                    renderRightActions={(progress, dragX) => (
+                      <View style={styles.swipeDeleteContainer}>
+                        <Animated.View
+                          style={[
+                            styles.deleteButton,
+                            {
+                              transform: [{
+                                translateX: dragX.interpolate({
+                                  inputRange: [-100, 0],
+                                  outputRange: [0, 100],
+                                  extrapolate: 'clamp',
+                                }),
+                              }],
+                            },
+                          ]}
+                        >
+                          <Ionicons name="trash-outline" size={24} color={COLORS.white} />
+                          <Text style={styles.deleteButtonText}>Delete</Text>
+                        </Animated.View>
+                      </View>
                     )}
-                  </TouchableOpacity>
+                    onSwipeableOpen={() => {
+                      deleteNotification(notification.id);
+                      // Close swipeable after deletion
+                      setTimeout(() => {
+                        swipeableRefs.current[notification.id]?.close();
+                      }, 100);
+                    }}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.notificationItem,
+                        !notification.read && styles.notificationItemUnread,
+                      ]}
+                      onPress={() => handleNotificationPress(notification)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        styles.notificationIcon,
+                        !notification.read && styles.notificationIconUnread,
+                      ]}>
+                        <Ionicons 
+                          name={notification.type === 'video_ready' ? 'videocam' : 'information-circle'} 
+                          size={24} 
+                          color={!notification.read ? COLORS.primary : COLORS.gray[500]} 
+                        />
+                      </View>
+                      <View style={styles.notificationContent}>
+                        <Text style={[
+                          styles.notificationTitle,
+                          !notification.read && styles.notificationTitleUnread,
+                        ]}>
+                          {notification.title}
+                        </Text>
+                        <Text style={[
+                          styles.notificationMessage,
+                          !notification.read && styles.notificationMessageUnread,
+                        ]}>
+                          {notification.message}
+                        </Text>
+                        <Text style={styles.notificationTime}>
+                          {formatTimeAgo(notification.createdAt)}
+                        </Text>
+                      </View>
+                      {!notification.read && (
+                        <View style={styles.unreadDot} />
+                      )}
+                    </TouchableOpacity>
+                  </Swipeable>
                 ))}
               </ScrollView>
             )}
@@ -295,8 +350,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textLight,
   },
-  placeholder: {
+  profileButton: {
     width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
   },
   modalOverlay: {
     flex: 1,
@@ -365,11 +424,41 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     backgroundColor: 'rgba(19, 127, 236, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   markAllText: {
-    fontSize: SIZES.body3,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  clearAllButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  clearAllText: {
+    color: '#EF4444',
+  },
+  swipeDeleteContainer: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 20,
+  },
+  deleteButton: {
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    paddingHorizontal: 10,
+  },
+  deleteButtonText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
   notificationList: {
     maxHeight: 500,

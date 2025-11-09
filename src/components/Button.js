@@ -5,7 +5,7 @@ import { COLORS, SIZES } from '../constants';
 const Button = ({
   title,
   onPress,
-  variant = 'primary', // primary, secondary, outline, ghost
+  variant = 'primary', // primary, secondary, outline, ghost, danger
   size = 'medium', // small, medium, large
   disabled = false,
   loading = false,
@@ -39,7 +39,15 @@ const Button = ({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? COLORS.white : COLORS.primary} />
+        <ActivityIndicator 
+          color={
+            variant === 'primary' || variant === 'danger' 
+              ? COLORS.white 
+              : variant === 'outline' || variant === 'ghost'
+              ? COLORS.textLight || '#E5E7EB'
+              : COLORS.primary
+          } 
+        />
       ) : (
         <>
           {icon && icon}
@@ -64,15 +72,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   secondary: {
-    backgroundColor: COLORS.gray[200],
+    backgroundColor: COLORS.gray[200] || '#E5E7EB',
   },
   outline: {
-    backgroundColor: COLORS.transparent,
-    borderWidth: 1,
-    borderColor: COLORS.gray[300],
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: COLORS.primary || '#137FEC',
   },
   ghost: {
-    backgroundColor: COLORS.transparent,
+    backgroundColor: 'transparent',
+  },
+  danger: {
+    backgroundColor: '#EF4444',
   },
   disabled: {
     opacity: 0.5,
@@ -98,13 +109,16 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   text_secondary: {
-    color: COLORS.gray[800],
+    color: COLORS.gray[800] || '#1F2937',
   },
   text_outline: {
-    color: COLORS.textLight,
+    color: COLORS.primary || '#137FEC',
   },
   text_ghost: {
-    color: COLORS.gray[500],
+    color: COLORS.gray[500] || '#9CA3AF',
+  },
+  text_danger: {
+    color: COLORS.white,
   },
   text_small: {
     fontSize: SIZES.body3,

@@ -2,10 +2,12 @@ import React, { useEffect } from 'react';
 import { View, Image, StyleSheet, Animated } from 'react-native';
 import { COLORS, IMAGES } from '../constants';
 import { LoadingDots } from '../components';
+import { useAuth } from '../context';
 
 const SplashScreen = ({ navigation }) => {
   const logoScale = new Animated.Value(0);
   const logoOpacity = new Animated.Value(0);
+  const { isAuthenticated, loading } = useAuth();
 
   useEffect(() => {
     // Animate logo entrance
@@ -22,13 +24,19 @@ const SplashScreen = ({ navigation }) => {
       }),
     ]).start();
 
-    // Navigate to Welcome screen after 3 seconds
+    // Check authentication and navigate after animation
     const timer = setTimeout(() => {
-      navigation.replace('Welcome');
+      if (!loading) {
+        if (isAuthenticated()) {
+          navigation.replace('Welcome');
+        } else {
+          navigation.replace('Login');
+        }
+      }
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [loading, isAuthenticated]);
 
   return (
     <View style={styles.container}>

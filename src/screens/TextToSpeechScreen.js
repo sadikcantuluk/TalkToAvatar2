@@ -758,11 +758,15 @@ const TextToSpeechScreen = ({ navigation, route }) => {
 
         {/* Input Section */}
         <View style={styles.inputSection}>
+          <View style={styles.labelContainer}>
+            <Text style={styles.inputLabel}>Output Name</Text>
+          </View>
           <Input
-            label="Output Name"
             placeholder="Name your audio file..."
             value={outputName}
             onChangeText={setOutputName}
+            containerStyle={styles.inputContainerOverride}
+            inputStyle={styles.inputStyleOverride}
           />
 
           <View>
@@ -790,6 +794,8 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               multiline={true}
               numberOfLines={5}
               maxLength={500}
+              containerStyle={styles.inputContainerOverride}
+              inputStyle={styles.inputStyleOverride}
               rightIcon={
                 <View style={styles.micButtonContainer}>
                   {isRecording && (
@@ -1083,6 +1089,9 @@ const styles = StyleSheet.create({
   inputSection: {
     marginBottom: 32,
   },
+  labelContainer: {
+    marginBottom: 8,
+  },
   textInputHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1092,7 +1101,15 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: SIZES.body3,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  inputContainerOverride: {
+    marginBottom: SIZES.padding,
+  },
+  inputStyleOverride: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    color: COLORS.textLight,
   },
   clearButton: {
     flexDirection: 'row',

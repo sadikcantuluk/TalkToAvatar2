@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta content='text/html; charset=UTF-8' http-equiv='Content-Type' />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #f9f9f9;
+      border-radius: 10px;
+      padding: 30px;
+      text-align: center;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: bold;
+      color: #4A90E2;
+      margin-bottom: 20px;
+    }
+    .code-box {
+      background-color: #4A90E2;
+      color: white;
+      font-size: 32px;
+      font-weight: bold;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      letter-spacing: 5px;
+    }
+    .info {
+      color: #666;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+    .warning {
+      color: #e74c3c;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">TalkToAvatar</div>
+    <h2>Email Verification</h2>
+    <p>Hi <%= @user.username %>,</p>
+    <p>Thank you for registering! Please use the verification code below to verify your email address:</p>
+    
+    <div class="code-box"><%= @code %></div>
+    
+    <div class="info">
+      <p>This code will expire in <%= @expires_in %> minutes.</p>
+      <p>If you didn't create an account, please ignore this email.</p>
+    </div>
+    
+    <div class="warning">
+      <p>⚠️ Never share this code with anyone.</p>
+    </div>
+  </div>
+</body>
+</html>
+

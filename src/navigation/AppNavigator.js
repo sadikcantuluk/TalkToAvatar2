@@ -3,6 +3,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {
   SplashScreen,
+  LoginScreen,
+  RegisterScreen,
+  EmailVerificationScreen,
+  ForgotPasswordScreen,
+  ResetPasswordScreen,
+  ProfileScreen,
   WelcomeScreen,
   SelectAvatarScreen,
   CreateCustomAvatarScreen,
@@ -32,8 +38,17 @@ const AppNavigator = () => {
           gestureDirection: 'horizontal',
         }}
       >
+        {/* Splash & Auth Screens */}
         <Stack.Screen name="Splash" component={SplashScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+        
+        {/* Main App Screens */}
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="SelectAvatar" component={SelectAvatarScreen} />
         <Stack.Screen name="CreateCustomAvatar" component={CreateCustomAvatarScreen} />
         <Stack.Screen name="Dashboard" component={TextToSpeechScreen} />

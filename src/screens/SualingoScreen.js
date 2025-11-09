@@ -135,6 +135,7 @@ const SualingoScreen = ({ navigation, route }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlayingReference, setIsPlayingReference] = useState(false);
   const [isPlayingUser, setIsPlayingUser] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [referenceAudioUri, setReferenceAudioUri] = useState(null);
   const [userAudioUri, setUserAudioUri] = useState(null);
   const [userTranscript, setUserTranscript] = useState('');
@@ -165,6 +166,13 @@ const SualingoScreen = ({ navigation, route }) => {
       setSelectedDisplayMode('avatar');
     }
   }, [route?.params?.selectedAvatar]);
+
+  // Reset reference audio when parameters change
+  useEffect(() => {
+    console.log('🔄 [DEBUG] Parameters changed, resetting reference audio...');
+    setReferenceAudioUri(null);
+    setIsPlayingReference(false);
+  }, [selectedLanguage, selectedVoice, currentSentenceIndex]);
 
   // Avatar animation when playing
   useEffect(() => {
@@ -228,29 +236,91 @@ const SualingoScreen = ({ navigation, route }) => {
     }
   }, [selectedLanguage]);
 
+  const fetchSentencesFromBackend = async (level, languageCode) => {
+    try {
+      console.log('🔄 [DEBUG] Fetching sentences from backend...');
+      console.log('📊 [DEBUG] Parameters:', { level, languageCode });
+      
+      const url = `http://192.168.1.37:3000/api/v1/sentences?level=${level}&language=${languageCode}`;
+      console.log('🌐 [DEBUG] Request URL:', url);
+      
+      const response = await fetch(url);
+
+      console.log('📡 [DEBUG] Response status:', response.status);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📦 [DEBUG] Response data:', JSON.stringify(data).substring(0, 200));
+        console.log('📊 [DEBUG] Fetched sentences count:', data.length);
+        
+        if (data.length > 0) {
+          const sentences = data.map(item => item.text || item.sentence);
+          console.log('✅ [SUCCESS] Sentences fetched from backend:', sentences.length);
+          console.log('📝 [DEBUG] First sentence:', sentences[0]);
+          return { success: true, sentences };
+        } else {
+          console.log('⚠️ [INFO] No sentences found in backend for this level/language');
+          return { success: false, sentences: [] };
+        }
+      } else {
+        const errorText = await response.text();
+        console.error('❌ [ERROR] Backend returned error status:', response.status);
+        console.error('❌ [ERROR] Response body:', errorText);
+        return { success: false, sentences: [] };
+      }
+    } catch (error) {
+      console.error('❌ [ERROR] Failed to fetch from backend:', error);
+      console.error('❌ [ERROR] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      return { success: false, sentences: [] };
+    }
+  };
+
   const translateSentences = async () => {
     try {
-      console.log('=== Translating Sentences ===');
-      console.log('Target language:', selectedLanguage);
+      console.log('=== Loading Sentences ===');
+      console.log('🌍 [DEBUG] Target language:', selectedLanguage);
+      console.log('📚 [DEBUG] Selected level:', selectedLevel);
       setIsTranslating(true);
 
+      // First, try to fetch from backend
+      console.log('🔍 [DEBUG] Checking backend for existing translations...');
+      const backendResult = await fetchSentencesFromBackend(selectedLevel, selectedLanguage);
+      
+      if (backendResult.success && backendResult.sentences.length > 0) {
+        console.log('✅ [SUCCESS] Using sentences from backend (no translation needed)');
+        console.log(`📊 [STATS] Loaded ${backendResult.sentences.length} sentences from database`);
+        setSentences(backendResult.sentences);
+      } else {
+        console.log('⚠️ [INFO] Sentences not found in backend, will translate...');
       const englishSentences = BASE_SENTENCES[selectedLevel] || [];
+        console.log('📝 [DEBUG] Number of sentences to translate:', englishSentences.length);
       const translatedSentences = [];
 
-      for (const sentence of englishSentences) {
+        for (let i = 0; i < englishSentences.length; i++) {
+          const sentence = englishSentences[i];
+          console.log(`🔄 [DEBUG] Translating sentence ${i + 1}/${englishSentences.length}...`);
+          
         const result = await translateText(sentence, selectedLanguage);
         if (result.success) {
           translatedSentences.push(result.translatedText);
+            console.log(`✅ [DEBUG] Translation successful: ${result.translatedText.substring(0, 50)}...`);
         } else {
-          // Fallback to English if translation fails
+            console.warn(`⚠️ [DEBUG] Translation failed for sentence ${i + 1}, using English fallback`);
           translatedSentences.push(sentence);
         }
       }
 
       setSentences(translatedSentences);
-      console.log('✅ Translation complete');
+        console.log('✅ [SUCCESS] Translation complete');
+        console.log(`📊 [STATS] Translated: ${translatedSentences.length} sentences`);
+      }
     } catch (error) {
-      console.error('Translation error:', error);
+      console.error('❌ [ERROR] Error loading sentences:', error);
+      console.error('❌ [ERROR] Error stack:', error.stack);
       // Fallback to English
       setSentences(BASE_SENTENCES[selectedLevel] || []);
     } finally {
@@ -260,7 +330,8 @@ const SualingoScreen = ({ navigation, route }) => {
 
   const handleLevelSelect = async (level) => {
     console.log('=== Level Selected ===');
-    console.log('Level:', level);
+    console.log('📚 [DEBUG] Level:', level);
+    console.log('🌍 [DEBUG] Current language:', selectedLanguage);
     setSelectedLevel(level);
     setCurrentSentenceIndex(0);
     setReferenceAudioUri(null);
@@ -272,26 +343,45 @@ const SualingoScreen = ({ navigation, route }) => {
     
     // If language is English, use base sentences directly
     if (selectedLanguage === 'en') {
+      console.log('✅ [DEBUG] Using English base sentences (no translation needed)');
       setSentences(BASE_SENTENCES[level] || []);
       setIsLoadingSentences(false);
     } else {
-      // Translate to selected language
+      // Try to fetch from backend first, then translate if needed
       try {
+        console.log('🔍 [DEBUG] Checking backend for existing translations...');
+        const backendResult = await fetchSentencesFromBackend(level, selectedLanguage);
+        
+        if (backendResult.success && backendResult.sentences.length > 0) {
+          console.log('✅ [SUCCESS] Using sentences from backend');
+          console.log(`📊 [STATS] Loaded ${backendResult.sentences.length} sentences from database`);
+          setSentences(backendResult.sentences);
+        } else {
+          console.log('⚠️ [INFO] Sentences not found in backend, translating...');
         const englishSentences = BASE_SENTENCES[level] || [];
+          console.log(`🔄 [DEBUG] Starting translation of ${englishSentences.length} sentences...`);
         const translatedSentences = [];
 
-        for (const sentence of englishSentences) {
+          for (let i = 0; i < englishSentences.length; i++) {
+            const sentence = englishSentences[i];
+            console.log(`🔄 [DEBUG] Translating ${i + 1}/${englishSentences.length}: ${sentence.substring(0, 30)}...`);
+            
           const result = await translateText(sentence, selectedLanguage);
           if (result.success) {
             translatedSentences.push(result.translatedText);
+              console.log(`✅ [DEBUG] Translated: ${result.translatedText.substring(0, 30)}...`);
           } else {
+              console.warn(`⚠️ [DEBUG] Translation failed for sentence ${i + 1}, using fallback`);
             translatedSentences.push(sentence);
           }
         }
 
         setSentences(translatedSentences);
+          console.log(`✅ [SUCCESS] Translation complete: ${translatedSentences.length} sentences`);
+        }
       } catch (error) {
-        console.error('Error loading sentences:', error);
+        console.error('❌ [ERROR] Error loading sentences:', error);
+        console.error('❌ [ERROR] Error details:', { name: error.name, message: error.message, stack: error.stack });
         setSentences(BASE_SENTENCES[level] || []);
       } finally {
         setIsLoadingSentences(false);
@@ -312,6 +402,7 @@ const SualingoScreen = ({ navigation, route }) => {
     }
 
     try {
+      // If audio is playing, stop it
       if (isPlayingReference) {
         await stopAudio();
         setIsPlayingReference(false);
@@ -321,13 +412,17 @@ const SualingoScreen = ({ navigation, route }) => {
       console.log('=== Playing Reference Audio ===');
       console.log('Sentence:', sentence);
 
+      // If audio doesn't exist, generate it
       if (!referenceAudioUri) {
-        console.log('Creating reference audio...');
-        // For Sualingo, we DON'T translate because sentence is already in target language
-        // Use generateSpeechOnly to avoid double translation
+        console.log('🎵 [DEBUG] Creating reference audio...');
+        setIsGeneratingAudio(true);
+        
         const result = await generateTextToSpeech(sentence, selectedVoice, selectedLanguage);
         
+        setIsGeneratingAudio(false);
+        
         if (result.success) {
+          console.log('✅ [DEBUG] Audio generated successfully');
           setReferenceAudioUri(result.audioUri);
           setIsPlayingReference(true);
           
@@ -343,6 +438,8 @@ const SualingoScreen = ({ navigation, route }) => {
           throw new Error(result.error);
         }
       } else {
+        // Audio exists, just play it
+        console.log('▶️ [DEBUG] Playing existing audio');
         setIsPlayingReference(true);
         
         if (selectedDisplayMode === 'gif') {
@@ -354,8 +451,9 @@ const SualingoScreen = ({ navigation, route }) => {
         });
       }
     } catch (error) {
-      console.error('Play reference error:', error);
+      console.error('❌ [ERROR] Play reference error:', error);
       setIsPlayingReference(false);
+      setIsGeneratingAudio(false);
       Alert.alert('Error', 'Failed to play reference audio');
     }
   };
@@ -912,15 +1010,19 @@ const SualingoScreen = ({ navigation, route }) => {
                 <TouchableOpacity
                   style={[styles.actionButton, styles.actionButtonPrimary]}
                   onPress={handlePlayReference}
-                  disabled={isPlayingReference}
+                  disabled={isGeneratingAudio || isPlayingReference}
                 >
-                  <Ionicons
-                    name={isPlayingReference ? 'pause' : 'play'}
-                    size={24}
-                    color={COLORS.white}
-                  />
+                  {isGeneratingAudio ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <Ionicons
+                      name={isPlayingReference ? 'pause' : (referenceAudioUri ? 'play' : 'musical-notes')}
+                      size={24}
+                      color={COLORS.white}
+                    />
+                  )}
                   <Text style={styles.actionButtonText}>
-                    {isPlayingReference ? 'Playing...' : 'Listen'}
+                    {isGeneratingAudio ? 'Generating...' : (isPlayingReference ? 'Stop' : (referenceAudioUri ? 'Play' : 'Listen'))}
                   </Text>
                 </TouchableOpacity>
 
