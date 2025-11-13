@@ -41,7 +41,7 @@ const PastAudioListScreen = ({ navigation }) => {
   const onRefresh = async () => {
     setRefreshing(true);
     await refresh();
-    setRefreshing(false);
+      setRefreshing(false);
   };
 
   const handleDelete = async (id) => {

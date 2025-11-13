@@ -82,9 +82,9 @@ const PastRecordingsListScreen = ({ navigation }) => {
               console.log('=== Deleting Recording ===');
               console.log('Recording ID:', recording.id);
               
-               // Delete from local storage
-               const newRecordings = recordings.filter(r => r.id !== recording.id);
-               setRecordings(newRecordings);
+              // Delete from local storage
+              const newRecordings = recordings.filter(r => r.id !== recording.id);
+              setRecordings(newRecordings);
                const key = getUserStorageKey('@sualingo_recordings_history', user.id);
                await AsyncStorage.setItem(key, JSON.stringify(newRecordings));
               
