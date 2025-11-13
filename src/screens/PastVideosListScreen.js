@@ -1,45 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { Header, Button } from '../components';
+import { VideoCardSkeleton, SkeletonList } from '../components/SkeletonComponents';
 import { useAuth } from '../context';
 import videosAPI from '../services/videosAPI';
-
-const VIDEO_HISTORY_KEY = '@video_history';
+import { getUserStorageKey } from '../utils/userStorage';
+import { useUserData } from '../hooks/useUserData';
 
 const PastVideosListScreen = ({ navigation }) => {
   const { token, user } = useAuth();
-  const [videoItems, setVideoItems] = useState([]);
+  const { data: videoItems, loading, refresh, setData: setVideoItems } = useUserData('videos');
   const [refreshing, setRefreshing] = useState(false);
-
-  useEffect(() => {
-    loadVideoHistory();
-  }, []);
-
-  const loadVideoHistory = async () => {
-    try {
-      console.log('=== Loading Video History ===');
-      const history = await AsyncStorage.getItem(VIDEO_HISTORY_KEY);
-      if (history) {
-        const videos = JSON.parse(history);
-        console.log('Loaded video items:', videos.length);
-        setVideoItems(videos);
-      } else {
-        console.log('No video history found');
-        setVideoItems([]);
-      }
-    } catch (error) {
-      console.error('Error loading video history:', error);
-      setVideoItems([]);
-    }
-  };
 
   const handleRefresh = async () => {
     console.log('=== Refreshing Video History ===');
     setRefreshing(true);
-    await loadVideoHistory();
+    await refresh();
     setRefreshing(false);
   };
 
@@ -65,7 +44,8 @@ const PastVideosListScreen = ({ navigation }) => {
               
               // Delete from local storage
               const updatedItems = videoItems.filter(item => item.id !== id);
-              await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(updatedItems));
+              const key = getUserStorageKey('@video_history', user.id);
+              await AsyncStorage.setItem(key, JSON.stringify(updatedItems));
               setVideoItems(updatedItems);
               console.log('✅ Video deleted locally. Remaining items:', updatedItems.length);
               
@@ -137,7 +117,13 @@ const PastVideosListScreen = ({ navigation }) => {
           />
         }
       >
-        {videoItems.length === 0 ? (
+        {loading ? (
+          <SkeletonList 
+            count={3} 
+            renderSkeleton={() => <VideoCardSkeleton />}
+            itemStyle={{ marginBottom: 16 }}
+          />
+        ) : videoItems.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="videocam-off-outline" size={64} color={COLORS.gray[600]} />
             <Text style={styles.emptyTitle}>No Videos Yet</Text>

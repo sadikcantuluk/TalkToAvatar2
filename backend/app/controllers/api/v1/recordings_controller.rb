@@ -61,20 +61,60 @@ module Api
         end
       end
 
-      # GET /api/v1/recordings/:user_id
-      def show
-        user = User.find(params[:id])
-        recordings = user.recordings.recent
+      # GET /api/v1/recordings
+      def index
+        recordings = current_user.recordings.recent
+        
+        render json: recordings.map { |recording|
+          {
+            id: recording.id,
+            level: recording.level,
+            transcript: recording.transcript,
+            reference_text: recording.reference_text,
+            score: recording.score,
+            language_code: recording.language_code,
+            local_uri: recording.local_uri,
+            created_at: recording.created_at
+          }
+        }, status: :ok
+      end
 
-        render json: recordings
+      # GET /api/v1/recordings/:id
+      def show
+        recording = current_user.recordings.find_by(id: params[:id])
+        
+        unless recording
+          render json: { error: 'Recording not found' }, status: :not_found
+          return
+        end
+
+        render json: {
+          id: recording.id,
+          level: recording.level,
+          transcript: recording.transcript,
+          reference_text: recording.reference_text,
+          score: recording.score,
+          language_code: recording.language_code,
+          local_uri: recording.local_uri,
+          created_at: recording.created_at,
+          updated_at: recording.updated_at
+        }, status: :ok
       end
 
       # DELETE /api/v1/recordings/:id
       def destroy
-        recording = Recording.find(params[:id])
-        recording.destroy
+        recording = current_user.recordings.find_by(id: params[:id])
+        
+        unless recording
+          render json: { error: 'Recording not found' }, status: :not_found
+          return
+        end
 
-        head :no_content
+        if recording.destroy
+          render json: { message: 'Recording deleted successfully' }, status: :ok
+        else
+          render json: { errors: recording.errors.full_messages }, status: :unprocessable_entity
+        end
       end
     end
   end

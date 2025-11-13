@@ -25,10 +25,7 @@ import {
 } from '../services/openAI';
 import { useAuth, useToast } from '../context';
 import audiosAPI from '../services/audiosAPI';
-
-const AUDIO_HISTORY_KEY = '@audio_history';
-const TEXT_HISTORY_KEY = '@text_history';
-const CUSTOM_AVATARS_KEY = '@custom_avatars';
+import { getUserStorageKey } from '../utils/userStorage';
 
 const TextToSpeechScreen = ({ navigation, route }) => {
   const { token, user } = useAuth();
@@ -70,14 +67,14 @@ const TextToSpeechScreen = ({ navigation, route }) => {
   const dotAnimationRef = useRef(null);
   const mouthAnimationRef = useRef(null);
 
-  // Load text history on mount
+  // Load text history on mount and when user changes
   useEffect(() => {
     loadTextHistory();
     return () => {
       // Cleanup on unmount
       stopAudio();
     };
-  }, []);
+  }, [user?.id]);
 
   // Handle avatar selection from SelectAvatarScreen
   // Only update the avatar, preserve all other state (inputs, audio, etc.)
@@ -303,7 +300,8 @@ const TextToSpeechScreen = ({ navigation, route }) => {
             // Custom avatar - load from AsyncStorage
             console.log('Avatar is custom, loading from storage:', audio.avatarName);
             try {
-              const savedAvatars = await AsyncStorage.getItem(CUSTOM_AVATARS_KEY);
+              const customAvatarsKey = getUserStorageKey('@custom_avatars', user?.id);
+              const savedAvatars = await AsyncStorage.getItem(customAvatarsKey);
               if (savedAvatars) {
                 const customAvatars = JSON.parse(savedAvatars);
                 console.log('Found custom avatars:', customAvatars.length);
@@ -359,28 +357,39 @@ const TextToSpeechScreen = ({ navigation, route }) => {
 
   // Load text history from AsyncStorage
   const loadTextHistory = async () => {
+    if (!user?.id) {
+      setTextHistory([]);
+      return;
+    }
+    
     try {
       console.log('=== Loading Text History ===');
-      const saved = await AsyncStorage.getItem(TEXT_HISTORY_KEY);
+      const key = getUserStorageKey('@text_history', user.id);
+      const saved = await AsyncStorage.getItem(key);
       if (saved) {
         const history = JSON.parse(saved);
         console.log('Loaded text history items:', history.length);
         setTextHistory(history);
       } else {
         console.log('No text history found');
+        setTextHistory([]);
       }
     } catch (error) {
       console.error('Error loading text history:', error);
+      setTextHistory([]);
     }
   };
 
   // Save text to history
   const saveTextToHistory = async (text) => {
+    if (!user?.id) return;
+    
     try {
       console.log('=== Saving Text to History ===');
       const newHistory = [text, ...textHistory.filter(t => t !== text)].slice(0, 20); // Keep last 20
       setTextHistory(newHistory);
-      await AsyncStorage.setItem(TEXT_HISTORY_KEY, JSON.stringify(newHistory));
+      const key = getUserStorageKey('@text_history', user.id);
+      await AsyncStorage.setItem(key, JSON.stringify(newHistory));
       console.log('Text saved to history. Total items:', newHistory.length);
     } catch (error) {
       console.error('Error saving text history:', error);
@@ -405,10 +414,11 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       };
       
       // Save to local AsyncStorage (fast - blocks UI)
-      const saved = await AsyncStorage.getItem(AUDIO_HISTORY_KEY);
+      const key = getUserStorageKey('@audio_history', user.id);
+      const saved = await AsyncStorage.getItem(key);
       const history = saved ? JSON.parse(saved) : [];
       const newHistory = [newAudio, ...history];
-      await AsyncStorage.setItem(AUDIO_HISTORY_KEY, JSON.stringify(newHistory));
+      await AsyncStorage.setItem(key, JSON.stringify(newHistory));
       console.log('✅ Audio saved to AsyncStorage. Total audios:', newHistory.length);
       
       // Show success toast immediately after local save (instant feedback)
@@ -434,7 +444,8 @@ const TextToSpeechScreen = ({ navigation, route }) => {
             console.log('✅ Audio saved to backend:', response.audio.id);
             
             // Update local storage with backend_id for future deletion
-            const saved = await AsyncStorage.getItem(AUDIO_HISTORY_KEY);
+            const key = getUserStorageKey('@audio_history', user.id);
+            const saved = await AsyncStorage.getItem(key);
             if (saved) {
               const history = JSON.parse(saved);
               const updatedHistory = history.map(item => {
@@ -443,7 +454,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
                 }
                 return item;
               });
-              await AsyncStorage.setItem(AUDIO_HISTORY_KEY, JSON.stringify(updatedHistory));
+              await AsyncStorage.setItem(key, JSON.stringify(updatedHistory));
             }
             // No toast here - already shown after local save
           } catch (backendError) {

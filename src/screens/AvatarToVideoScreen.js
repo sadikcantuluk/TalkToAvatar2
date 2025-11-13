@@ -21,8 +21,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useAuth, useToast } from '../context';
 import videosAPI from '../services/videosAPI';
 import notificationsAPI from '../services/notificationsAPI';
-
-const VIDEO_HISTORY_KEY = '@video_history';
+import { getUserStorageKey } from '../utils/userStorage';
 
 const AvatarToVideoScreen = ({ navigation, route }) => {
   const { addNotification } = useNotifications();
@@ -80,7 +79,8 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
         } else if (video.avatarName) {
           console.log('Loading custom avatar:', video.avatarName);
           try {
-            const customAvatarsJSON = await AsyncStorage.getItem('@custom_avatars');
+            const customAvatarsKey = getUserStorageKey('@custom_avatars', user?.id);
+            const customAvatarsJSON = await AsyncStorage.getItem(customAvatarsKey);
             if (customAvatarsJSON) {
               const customAvatars = JSON.parse(customAvatarsJSON);
               const customAvatar = customAvatars.find(a => a.name === video.avatarName);
@@ -123,14 +123,20 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
   };
 
   const saveVideoToHistory = async (videoData) => {
+    if (!user?.id) {
+      showError('User not authenticated');
+      return;
+    }
+    
     try {
       console.log('=== Saving Video to History ===');
+      const key = getUserStorageKey('@video_history', user.id);
       
       // Save to local AsyncStorage (fast)
-      const existingHistory = await AsyncStorage.getItem(VIDEO_HISTORY_KEY);
+      const existingHistory = await AsyncStorage.getItem(key);
       const history = existingHistory ? JSON.parse(existingHistory) : [];
       history.unshift(videoData);
-      await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(history));
+      await AsyncStorage.setItem(key, JSON.stringify(history));
       console.log('✅ Video saved to AsyncStorage. Total videos:', history.length);
       
       // Save to backend asynchronously (non-blocking)
@@ -157,7 +163,7 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
             console.log('✅ Video saved to backend:', backendId);
             
             // Update local storage with backend_id for future deletion
-            const saved = await AsyncStorage.getItem(VIDEO_HISTORY_KEY);
+            const saved = await AsyncStorage.getItem(key);
             if (saved && backendId) {
               const history = JSON.parse(saved);
               const updatedHistory = history.map(item => {
@@ -166,7 +172,7 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
                 }
                 return item;
               });
-              await AsyncStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(updatedHistory));
+              await AsyncStorage.setItem(key, JSON.stringify(updatedHistory));
             }
           } catch (backendError) {
             console.error('⚠️ Backend save failed, but local save succeeded:', backendError);

@@ -25,9 +25,7 @@ import {
 } from '../services/openAI';
 import { useAuth, useToast } from '../context';
 import recordingsAPI from '../services/recordingsAPI';
-
-const RECORDINGS_HISTORY_KEY = '@sualingo_recordings_history';
-const CUSTOM_AVATARS_KEY = '@custom_avatars';
+import { getUserStorageKey } from '../utils/userStorage';
 
 // Dil seviyeleri
 const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -624,10 +622,16 @@ const SualingoScreen = ({ navigation, route }) => {
   };
 
   const saveRecordingToHistory = async (recordingData) => {
+    if (!user?.id) {
+      showError('User not authenticated');
+      return;
+    }
+    
     try {
       console.log('=== Saving Recording to History ===');
+      const key = getUserStorageKey('@sualingo_recordings_history', user.id);
       
-      const saved = await AsyncStorage.getItem(RECORDINGS_HISTORY_KEY);
+      const saved = await AsyncStorage.getItem(key);
       const history = saved ? JSON.parse(saved) : [];
       
       const date = new Date();
@@ -644,7 +648,7 @@ const SualingoScreen = ({ navigation, route }) => {
       
       // Save to local AsyncStorage (fast)
       const newHistory = [newRecording, ...history];
-      await AsyncStorage.setItem(RECORDINGS_HISTORY_KEY, JSON.stringify(newHistory));
+      await AsyncStorage.setItem(key, JSON.stringify(newHistory));
       console.log('✅ Recording saved to AsyncStorage. Total recordings:', newHistory.length);
       
       // Show success toast immediately
@@ -669,7 +673,7 @@ const SualingoScreen = ({ navigation, route }) => {
             console.log('✅ Recording saved to backend:', response.recording.id);
             
             // Update local storage with backend_id for future deletion
-            const saved = await AsyncStorage.getItem(RECORDINGS_HISTORY_KEY);
+            const saved = await AsyncStorage.getItem(key);
             if (saved) {
               const history = JSON.parse(saved);
               const updatedHistory = history.map(item => {
@@ -678,7 +682,7 @@ const SualingoScreen = ({ navigation, route }) => {
                 }
                 return item;
               });
-              await AsyncStorage.setItem(RECORDINGS_HISTORY_KEY, JSON.stringify(updatedHistory));
+              await AsyncStorage.setItem(key, JSON.stringify(updatedHistory));
             }
           } catch (backendError) {
             console.error('⚠️ Backend save failed, but local save succeeded:', backendError);

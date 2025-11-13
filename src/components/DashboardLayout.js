@@ -181,9 +181,9 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity 
-                      onPress={() => {
+                      onPress={async () => {
                         if (notifications.length > 0) {
-                          clearAll();
+                          await clearAll();
                         }
                       }}
                       style={[styles.markAllButton, styles.clearAllButton]}

@@ -14,8 +14,9 @@ import { COLORS, SIZES, IMAGES } from '../constants';
 import { Header, Button } from '../components';
 import { useAuth } from '../context';
 import customAvatarsAPI from '../services/customAvatarsAPI';
-
-const CUSTOM_AVATARS_KEY = '@custom_avatars';
+import { getUserStorageKey } from '../utils/userStorage';
+import { useUserData } from '../hooks/useUserData';
+import { AvatarGridItemSkeleton, SkeletonList } from '../components/SkeletonComponents';
 
 const defaultAvatars = [
   {
@@ -37,42 +38,21 @@ const defaultAvatars = [
 const SelectAvatarScreen = ({ navigation, route }) => {
   const { token, user } = useAuth();
   const [selectedAvatar, setSelectedAvatar] = useState('yusuf');
-  const [customAvatars, setCustomAvatars] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: customAvatars, loading: isLoading, setData: setCustomAvatars, refresh: refreshAvatars } = useUserData('customAvatars');
 
-  // Load custom avatars from AsyncStorage on mount
-  useEffect(() => {
-    loadCustomAvatars();
-  }, []);
-
-  const loadCustomAvatars = async () => {
-    try {
-      console.log('=== Loading Custom Avatars ===');
-      const savedAvatars = await AsyncStorage.getItem(CUSTOM_AVATARS_KEY);
-      if (savedAvatars) {
-        const parsedAvatars = JSON.parse(savedAvatars);
-        console.log('Loaded custom avatars:', parsedAvatars.length);
-        console.log('Avatar details:', parsedAvatars.map(a => ({ id: a.id, name: a.name })));
-        setCustomAvatars(parsedAvatars);
-      } else {
-        console.log('No custom avatars found in storage');
-        setCustomAvatars([]);
-      }
-    } catch (error) {
-      console.error('Error loading custom avatars:', error);
-      console.error('Error stack:', error.stack);
-      setCustomAvatars([]);
-    } finally {
-      setIsLoading(false);
-    }
+  const getCustomAvatarsKey = () => {
+    return getUserStorageKey('@custom_avatars', user?.id);
   };
 
   const saveCustomAvatars = async (avatars) => {
+    if (!user?.id) return;
+    
     try {
       console.log('=== Saving Custom Avatars ===');
       console.log('Number of avatars to save:', avatars.length);
       console.log('Avatar details:', avatars.map(a => ({ id: a.id, name: a.name })));
-      await AsyncStorage.setItem(CUSTOM_AVATARS_KEY, JSON.stringify(avatars));
+      const key = getCustomAvatarsKey();
+      await AsyncStorage.setItem(key, JSON.stringify(avatars));
       console.log('Avatars saved successfully to AsyncStorage');
     } catch (error) {
       console.error('Error saving custom avatars:', error);
@@ -88,7 +68,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
         console.log('Route params:', route.params);
         
         // Reload custom avatars from storage to ensure we have the latest data
-        await loadCustomAvatars();
+        await refreshAvatars();
         
         if (route.params?.customAvatar) {
           const newAvatar = route.params.customAvatar;
@@ -96,7 +76,8 @@ const SelectAvatarScreen = ({ navigation, route }) => {
           
           try {
             // Load current avatars from storage
-            const savedAvatars = await AsyncStorage.getItem(CUSTOM_AVATARS_KEY);
+            const key = getCustomAvatarsKey();
+            const savedAvatars = await AsyncStorage.getItem(key);
             let currentAvatars = savedAvatars ? JSON.parse(savedAvatars) : [];
             console.log('Current avatars in storage:', currentAvatars.length);
             
@@ -253,7 +234,23 @@ const SelectAvatarScreen = ({ navigation, route }) => {
         </View>
 
         {/* Custom Avatars */}
-        {customAvatars.length > 0 && (
+        {isLoading ? (
+          <>
+            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Custom Avatars</Text>
+            <View style={styles.grid}>
+              <SkeletonList 
+                count={2} 
+                renderSkeleton={() => (
+                  <View style={styles.avatarWrapper}>
+                    <AvatarGridItemSkeleton />
+                  </View>
+                )}
+                containerStyle={styles.gridSkeleton}
+                itemStyle={{ marginBottom: 0 }}
+              />
+            </View>
+          </>
+        ) : customAvatars.length > 0 && (
           <>
             <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Custom Avatars</Text>
             <View style={styles.grid}>
@@ -351,6 +348,13 @@ const styles = StyleSheet.create({
   },
   sectionTitleSpaced: {
     marginTop: 24,
+  },
+  gridSkeleton: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 16,
+    padding: 0,
   },
   grid: {
     flexDirection: 'row',

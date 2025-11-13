@@ -339,6 +339,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
           variant="primary"
           style={styles.actionButton}
           disabled={isLoading}
+          loading={isLoading}
         />
         <Button
           title="Recreate"

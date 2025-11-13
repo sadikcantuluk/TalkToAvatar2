@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearUserData } from '../utils/userStorage';
 
 const AuthContext = createContext();
 
@@ -39,6 +40,11 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (authToken, userData) => {
     try {
+      // Clear any previous user's data if switching users
+      if (user && user.id && user.id !== userData.id) {
+        await clearUserData(user.id);
+      }
+      
       await AsyncStorage.setItem('authToken', authToken);
       await AsyncStorage.setItem('userData', JSON.stringify(userData));
       setToken(authToken);
@@ -51,6 +57,11 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Clear current user's data on logout
+      if (user && user.id) {
+        await clearUserData(user.id);
+      }
+      
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('userData');
       setToken(null);

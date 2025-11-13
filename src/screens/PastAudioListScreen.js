@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -13,55 +13,35 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { Header, Button } from '../components';
+import { AudioCardSkeleton, SkeletonList } from '../components/SkeletonComponents';
 import { playAudio, stopAudio } from '../services/openAI';
 import { useAuth } from '../context';
 import audiosAPI from '../services/audiosAPI';
-
-const AUDIO_HISTORY_KEY = '@audio_history';
+import { getUserStorageKey } from '../utils/userStorage';
+import { useUserData } from '../hooks/useUserData';
 
 const PastAudioListScreen = ({ navigation }) => {
   const { token, user } = useAuth();
-  const [audioItems, setAudioItems] = useState([]);
+  const { data: audioItems, loading: isLoading, refresh, setData: setAudioItems } = useUserData('audios');
   const [playingId, setPlayingId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load audio history when screen comes into focus
+  // Refresh when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadAudioHistory();
+      refresh();
       return () => {
         // Stop any playing audio when leaving screen
         stopAudio();
         setPlayingId(null);
       };
-    }, [])
+    }, [refresh])
   );
 
-  const loadAudioHistory = async () => {
-    try {
-      console.log('=== Loading Audio History ===');
-      const saved = await AsyncStorage.getItem(AUDIO_HISTORY_KEY);
-      if (saved) {
-        const history = JSON.parse(saved);
-        console.log('Loaded audio items:', history.length);
-        setAudioItems(history);
-      } else {
-        console.log('No audio history found');
-        setAudioItems([]);
-      }
-    } catch (error) {
-      console.error('Error loading audio history:', error);
-      Alert.alert('Error', 'Failed to load audio history');
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadAudioHistory();
+    await refresh();
+    setRefreshing(false);
   };
 
   const handleDelete = async (id) => {
@@ -83,7 +63,8 @@ const PastAudioListScreen = ({ navigation }) => {
               // Delete from local storage
               const updatedItems = audioItems.filter(item => item.id !== id);
               setAudioItems(updatedItems);
-              await AsyncStorage.setItem(AUDIO_HISTORY_KEY, JSON.stringify(updatedItems));
+              const key = getUserStorageKey('@audio_history', user.id);
+              await AsyncStorage.setItem(key, JSON.stringify(updatedItems));
               
               console.log('✅ Audio deleted locally. Remaining items:', updatedItems.length);
               
@@ -183,7 +164,18 @@ const PastAudioListScreen = ({ navigation }) => {
         onBackPress={() => navigation.goBack()}
       />
 
-      {audioItems.length === 0 && !isLoading ? (
+      {isLoading ? (
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.content}
+        >
+          <SkeletonList 
+            count={3} 
+            renderSkeleton={() => <AudioCardSkeleton />}
+            itemStyle={{ marginBottom: 16 }}
+          />
+        </ScrollView>
+      ) : audioItems.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="musical-notes-outline" size={64} color={COLORS.gray[600]} />
           <Text style={styles.emptyTitle}>No Audio Yet</Text>

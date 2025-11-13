@@ -1,10 +1,9 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import notificationsAPI from '../services/notificationsAPI';
+import { getUserStorageKey } from '../utils/userStorage';
 
 const NotificationContext = createContext();
-
-const NOTIFICATIONS_KEY = '@notifications';
 
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
@@ -22,10 +21,21 @@ export const NotificationProvider = ({ children, authToken, authUser }) => {
   const token = authToken;
   const user = authUser;
 
-  // Load notifications from storage
+  // Load notifications from storage and sync with backend
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    if (user?.id) {
+      loadNotifications();
+    } else {
+      setNotifications([]);
+    }
+  }, [user?.id]);
+
+  // Sync with backend when token/user changes
+  useEffect(() => {
+    if (token && user) {
+      syncNotificationsWithBackend();
+    }
+  }, [token, user, syncNotificationsWithBackend]);
 
   // Update unread count whenever notifications change
   useEffect(() => {
@@ -33,9 +43,16 @@ export const NotificationProvider = ({ children, authToken, authUser }) => {
     setUnreadCount(unread);
   }, [notifications]);
 
+  const getNotificationsKey = () => {
+    return getUserStorageKey('@notifications', user?.id);
+  };
+
   const loadNotifications = async () => {
+    if (!user?.id) return;
+    
     try {
-      const stored = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
+      const key = getNotificationsKey();
+      const stored = await AsyncStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
         setNotifications(parsed);
@@ -45,9 +62,106 @@ export const NotificationProvider = ({ children, authToken, authUser }) => {
     }
   };
 
-  const saveNotifications = async (notifs) => {
+  // Sync notifications with backend to ensure all are saved to database
+  const syncNotificationsWithBackend = useCallback(async () => {
+    if (!token || !user) return;
+
     try {
-      await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifs));
+      // Get current local notifications first
+      const key = getNotificationsKey();
+      const stored = await AsyncStorage.getItem(key);
+      const localNotifications = stored ? JSON.parse(stored) : [];
+      
+      // Load notifications from backend
+      const backendNotifications = await notificationsAPI.getAll(token);
+      
+      // Create a map of backend notifications by their ID
+      const backendMap = new Map();
+      backendNotifications.forEach(backendNotif => {
+        backendMap.set(backendNotif.id, backendNotif);
+      });
+
+      // Collect notifications that need to be saved to backend
+      const notificationsToSave = localNotifications.filter(n => !n.backend_id && !n.fromBackend);
+
+      // Update local notifications: ensure all have backend_id and sync data
+      const updated = localNotifications.map(localNotif => {
+        // If notification has backend_id, check if it still exists in backend
+        if (localNotif.backend_id) {
+          const backendNotif = backendMap.get(localNotif.backend_id);
+          if (backendNotif) {
+            // Update with latest backend data
+            return {
+              ...localNotif,
+              read: backendNotif.read,
+              // Keep local id and other local properties
+            };
+          }
+        }
+        return localNotif;
+      });
+
+      // Add any backend notifications that don't exist locally
+      backendNotifications.forEach(backendNotif => {
+        const existsLocally = updated.some(n => n.backend_id === backendNotif.id);
+        if (!existsLocally) {
+          updated.push({
+            id: `backend_${backendNotif.id}`,
+            backend_id: backendNotif.id,
+            title: backendNotif.title,
+            message: backendNotif.message,
+            type: backendNotif.type,
+            read: backendNotif.read,
+            createdAt: backendNotif.created_at,
+            fromBackend: true,
+          });
+        }
+      });
+
+      // Sort by createdAt (newest first)
+      updated.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      // Save updated notifications
+      setNotifications(updated);
+      await saveNotifications(updated);
+
+      // Ensure all local notifications without backend_id are saved to backend
+      for (const notif of notificationsToSave) {
+        try {
+          const backendData = {
+            title: notif.title,
+            message: notif.message,
+            type: notif.type || 'info',
+          };
+          
+          const response = await notificationsAPI.create(token, backendData);
+          const backendId = response.notification?.id;
+          
+          if (backendId) {
+            // Update the notification with backend_id
+            setNotifications(prevNotifications => {
+              const updated = prevNotifications.map(n => 
+                n.id === notif.id ? { ...n, backend_id: backendId } : n
+              );
+              saveNotifications(updated);
+              return updated;
+            });
+          }
+        } catch (error) {
+          console.error('⚠️ Failed to save notification to backend during sync:', error);
+        }
+      }
+    } catch (error) {
+      console.error('⚠️ Error syncing notifications with backend:', error);
+    }
+  }, [token, user]);
+
+  const saveNotifications = async (notifs) => {
+    if (!user?.id) return;
+    
+    try {
+      const key = getNotificationsKey();
+      await AsyncStorage.setItem(key, JSON.stringify(notifs));
     } catch (error) {
       console.error('Error saving notifications:', error);
     }
@@ -147,21 +261,41 @@ export const NotificationProvider = ({ children, authToken, authUser }) => {
       return updated;
     });
     
-    // Delete from backend if authenticated
+    // Delete from backend if authenticated - properly await the deletion
     if (token && user && backendId) {
-      Promise.resolve().then(async () => {
-        try {
-          console.log('📤 Deleting notification from backend (background)...');
-          await notificationsAPI.delete(token, backendId);
-          console.log('✅ Notification deleted from backend');
-        } catch (backendError) {
-          console.error('⚠️ Backend delete failed, but local delete succeeded:', backendError);
-        }
-      });
+      try {
+        console.log('📤 Deleting notification from backend...');
+        await notificationsAPI.delete(token, backendId);
+        console.log('✅ Notification deleted from backend');
+      } catch (backendError) {
+        console.error('⚠️ Backend delete failed, but local delete succeeded:', backendError);
+        // Optionally restore the notification locally if backend delete fails
+        // For now, we'll keep it deleted locally as the user intended
+      }
     }
   };
 
-  const clearAll = () => {
+  const clearAll = async () => {
+    // Delete all notifications from backend if authenticated
+    if (token && user) {
+      const notificationsWithBackendId = notifications.filter(n => n.backend_id);
+      
+      // Delete all from backend in parallel
+      const deletePromises = notificationsWithBackendId.map(notif => 
+        notificationsAPI.delete(token, notif.backend_id).catch(error => {
+          console.error(`⚠️ Failed to delete notification ${notif.backend_id} from backend:`, error);
+        })
+      );
+      
+      try {
+        await Promise.all(deletePromises);
+        console.log('✅ All notifications deleted from backend');
+      } catch (error) {
+        console.error('⚠️ Some notifications failed to delete from backend:', error);
+      }
+    }
+    
+    // Clear local storage
     setNotifications([]);
     saveNotifications([]);
   };

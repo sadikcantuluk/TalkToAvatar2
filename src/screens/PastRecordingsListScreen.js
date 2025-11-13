@@ -7,50 +7,28 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
+import { RecordingCardSkeleton, SkeletonList } from '../components/SkeletonComponents';
 import { playAudio, stopAudio } from '../services/openAI';
 import { useAuth } from '../context';
 import recordingsAPI from '../services/recordingsAPI';
-
-const RECORDINGS_HISTORY_KEY = '@sualingo_recordings_history';
+import { getUserStorageKey } from '../utils/userStorage';
+import { useUserData } from '../hooks/useUserData';
 
 const PastRecordingsListScreen = ({ navigation }) => {
   const { token, user } = useAuth();
-  const [recordings, setRecordings] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: recordings, loading: isLoading, setData: setRecordings } = useUserData('recordings');
   const [playingId, setPlayingId] = useState(null);
 
   useEffect(() => {
-    loadRecordings();
-    
     return () => {
       stopAudio();
     };
   }, []);
-
-  const loadRecordings = async () => {
-    try {
-      console.log('=== Loading Recordings History ===');
-      setIsLoading(true);
-      
-      const saved = await AsyncStorage.getItem(RECORDINGS_HISTORY_KEY);
-      if (saved) {
-        const history = JSON.parse(saved);
-        console.log('Loaded recordings:', history.length);
-        setRecordings(history);
-      } else {
-        console.log('No recordings found');
-      }
-    } catch (error) {
-      console.error('Error loading recordings:', error);
-      Alert.alert('Error', 'Failed to load recordings');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handlePlayRecording = async (recording) => {
     if (!recording.audioUri) {
@@ -104,13 +82,11 @@ const PastRecordingsListScreen = ({ navigation }) => {
               console.log('=== Deleting Recording ===');
               console.log('Recording ID:', recording.id);
               
-              // Delete from local storage
-              const newRecordings = recordings.filter(r => r.id !== recording.id);
-              setRecordings(newRecordings);
-              await AsyncStorage.setItem(
-                RECORDINGS_HISTORY_KEY,
-                JSON.stringify(newRecordings)
-              );
+               // Delete from local storage
+               const newRecordings = recordings.filter(r => r.id !== recording.id);
+               setRecordings(newRecordings);
+               const key = getUserStorageKey('@sualingo_recordings_history', user.id);
+               await AsyncStorage.setItem(key, JSON.stringify(newRecordings));
               
               console.log('✅ Recording deleted locally. Remaining items:', newRecordings.length);
               
@@ -232,10 +208,16 @@ const PastRecordingsListScreen = ({ navigation }) => {
 
       {/* Content */}
       {isLoading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading recordings...</Text>
-        </View>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.listContent}
+        >
+          <SkeletonList 
+            count={3} 
+            renderSkeleton={() => <RecordingCardSkeleton />}
+            itemStyle={{ marginBottom: 16 }}
+          />
+        </ScrollView>
       ) : recordings.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="mic-off-outline" size={64} color={COLORS.gray[600]} />
@@ -291,6 +273,9 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  scrollView: {
+    flex: 1,
   },
   centerContainer: {
     flex: 1,
