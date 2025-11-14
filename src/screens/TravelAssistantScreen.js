@@ -52,6 +52,10 @@ const TravelAssistantScreen = ({ navigation }) => {
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [isCounterpartSpeaking, setIsCounterpartSpeaking] = useState(false);
   
+  // Speech generation loading states
+  const [isUserGeneratingSpeech, setIsUserGeneratingSpeech] = useState(false);
+  const [isCounterpartGeneratingSpeech, setIsCounterpartGeneratingSpeech] = useState(false);
+  
   // Sending states
   const [isSending, setIsSending] = useState(false);
 
@@ -222,10 +226,17 @@ const TravelAssistantScreen = ({ navigation }) => {
     const voice = isUser ? userVoice : counterpartVoice;
     const isSpeaking = isUser ? isUserSpeaking : isCounterpartSpeaking;
     const setSpeaking = isUser ? setIsUserSpeaking : setIsCounterpartSpeaking;
+    const isGenerating = isUser ? isUserGeneratingSpeech : isCounterpartGeneratingSpeech;
+    const setGenerating = isUser ? setIsUserGeneratingSpeech : setIsCounterpartGeneratingSpeech;
     const side = isUser ? 'User' : 'Counterpart';
 
     if (!text.trim()) {
       Alert.alert('Error', 'Please enter some text to speak');
+      return;
+    }
+
+    // Prevent multiple clicks while generating
+    if (isGenerating) {
       return;
     }
 
@@ -242,24 +253,37 @@ const TravelAssistantScreen = ({ navigation }) => {
         console.log('Selected Voice:', voice);
         console.log('✅ Using generateSpeechOnly - NO translation will occur');
         
-        // Generate speech ONLY - text is already in correct language
-        // This function will NOT translate, just convert text to speech
-        const result = await generateSpeechOnly(text, voice);
+        // Set loading state before generating speech
+        setGenerating(true);
         
-        if (result.success) {
-          setSpeaking(true);
-          await playAudio(result.audioUri, () => {
-            setSpeaking(false);
-          });
-          console.log('✅ Speech playback started - text spoken as-is');
-        } else {
-          Alert.alert('Error', 'Failed to generate speech');
+        try {
+          // Generate speech ONLY - text is already in correct language
+          // This function will NOT translate, just convert text to speech
+          const result = await generateSpeechOnly(text, voice);
+          
+          // Reset loading state
+          setGenerating(false);
+          
+          if (result.success) {
+            setSpeaking(true);
+            await playAudio(result.audioUri, () => {
+              setSpeaking(false);
+            });
+            console.log('✅ Speech playback started - text spoken as-is');
+          } else {
+            Alert.alert('Error', 'Failed to generate speech');
+          }
+        } catch (genError) {
+          // Reset loading state on error
+          setGenerating(false);
+          throw genError;
         }
       }
     } catch (error) {
       console.error(`${side} speak error:`, error);
       console.error('Error stack:', error.stack);
       setSpeaking(false);
+      setGenerating(false);
       Alert.alert('Error', 'Failed to speak text');
     }
   };
@@ -397,7 +421,8 @@ const TravelAssistantScreen = ({ navigation }) => {
                 variant="outline" 
                 style={styles.smallButton}
                 onPress={() => handleSpeak(true)}
-                disabled={!userText.trim()}
+                disabled={!userText.trim() || isUserGeneratingSpeech}
+                loading={isUserGeneratingSpeech}
               />
               <Button 
                 title={isSending ? "Sending..." : "Send"} 
@@ -490,7 +515,8 @@ const TravelAssistantScreen = ({ navigation }) => {
                 variant="outline" 
                 style={styles.smallButton}
                 onPress={() => handleSpeak(false)}
-                disabled={!counterpartText.trim()}
+                disabled={!counterpartText.trim() || isCounterpartGeneratingSpeech}
+                loading={isCounterpartGeneratingSpeech}
               />
               <Button 
                 title={isSending ? "Sending..." : "Send"} 

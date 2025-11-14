@@ -17,4 +17,5 @@ export {
   AvatarGridItemSkeleton,
   SkeletonList 
 } from './SkeletonComponents';
+export { default as PronunciationResult } from './PronunciationResult';
 

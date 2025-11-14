@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_01_05_000005) do
+ActiveRecord::Schema[7.1].define(version: 2025_11_14_182550) do
   create_schema "auth"
   create_schema "extensions"
   create_schema "graphql"
@@ -112,21 +112,14 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_05_000005) do
     t.string "language_code", limit: 5
     t.timestamptz "created_at", default: -> { "CURRENT_TIMESTAMP" }
     t.timestamptz "updated_at", default: -> { "CURRENT_TIMESTAMP" }
+    t.float "accuracy", default: 0.0
+    t.float "fluency", default: 0.0
+    t.float "completeness", default: 0.0
+    t.jsonb "words", default: []
     t.index ["language_code"], name: "idx_recordings_language"
     t.index ["level"], name: "idx_recordings_level"
     t.index ["user_id"], name: "idx_recordings_user_id"
     t.check_constraint "level::text = ANY (ARRAY['A1'::character varying, 'A2'::character varying, 'B1'::character varying, 'B2'::character varying, 'C1'::character varying, 'C2'::character varying]::text[])", name: "recordings_level_check"
-  end
-
-  create_table "notifications", id: :uuid, default: -> { "uuid_generate_v4()" }, force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.string "title", limit: 255, null: false
-    t.text "message", null: false
-    t.string "type", limit: 50, default: "info", null: false
-    t.boolean "read", default: false, null: false
-    t.timestamptz "created_at", default: -> { "CURRENT_TIMESTAMP" }
-    t.timestamptz "updated_at", default: -> { "CURRENT_TIMESTAMP" }
-    t.index ["user_id"], name: "idx_notifications_user_id"
   end
 
   create_table "sentence_banks", id: :uuid, default: -> { "uuid_generate_v4()" }, force: :cascade do |t|

@@ -9,11 +9,14 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES, IMAGES } from '../constants';
-import { DashboardLayout, LanguageSelector, VoiceSelector } from '../components';
+import { DashboardLayout, LanguageSelector, VoiceSelector, PronunciationResult } from '../components';
 import {
   generateTextToSpeech,
   playAudio,
@@ -26,6 +29,12 @@ import {
 import { useAuth, useToast } from '../context';
 import recordingsAPI from '../services/recordingsAPI';
 import { getUserStorageKey } from '../utils/userStorage';
+import { evaluatePronunciationWithFile } from '../services/railsAPI';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Dil seviyeleri
 const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -509,48 +518,76 @@ const SualingoScreen = ({ navigation, route }) => {
 
   const evaluatePronunciation = async (audioUri, referenceSentence) => {
     try {
-      console.log('=== Evaluating Pronunciation ===');
+      console.log('=== Evaluating Pronunciation with Azure Speech API ===');
       setIsEvaluating(true);
 
-      // IMPORTANT: Pass language code to Whisper for accurate transcription
-      const transcription = await transcribeAudio(audioUri, selectedLanguage);
+      // Send audio file directly to backend (no Supabase upload needed)
+      console.log('Sending audio file directly to backend...');
       
-      if (transcription.success) {
-        const userText = transcription.text;
+      // Create FormData with the audio file
+      const formData = new FormData();
+      formData.append('audio_file', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: `recording_${Date.now()}.m4a`,
+      });
+      formData.append('reference_text', referenceSentence);
+      formData.append('language_code', selectedLanguage);
+
+      // Call evaluate endpoint with file
+      const evaluationResult = await evaluatePronunciationWithFile(
+        formData,
+        referenceSentence,
+        selectedLanguage
+      );
+      
+      if (evaluationResult.success) {
+        const userText = evaluationResult.transcript;
         setUserTranscript(userText);
         
         console.log('Reference:', referenceSentence);
         console.log('User said:', userText);
         console.log('Language:', selectedLanguage);
+        console.log('Overall Score:', evaluationResult.score);
+        console.log('Accuracy:', evaluationResult.accuracy_score);
+        console.log('Fluency:', evaluationResult.fluency_score);
+        console.log('Completeness:', evaluationResult.completeness_score);
 
-        const score = calculateSimilarityScore(referenceSentence, userText);
-        const feedback = generateFeedback(score, referenceSentence, userText);
-
+        // Store detailed scoring information
         setPronunciationScore({
-          score: score,
-          feedback: feedback,
+          score: evaluationResult.score,
+          accuracy_score: evaluationResult.accuracy_score,
+          fluency_score: evaluationResult.fluency_score,
+          completeness_score: evaluationResult.completeness_score,
+          feedback: evaluationResult.feedback,
           original: referenceSentence,
           userText: userText,
+          word_level_details: evaluationResult.word_level_details || [],
+          detailed_scores: evaluationResult.detailed_scores,
         });
 
         await saveRecordingToHistory({
           level: selectedLevel,
           sentence: referenceSentence,
           userTranscript: userText,
-          pronunciationScore: score,
-          userAudioUri: userAudioUri,
+          pronunciationScore: evaluationResult.score,
+          accuracyScore: evaluationResult.accuracy_score,
+          fluencyScore: evaluationResult.fluency_score,
+          completenessScore: evaluationResult.completeness_score,
+          wordLevelDetails: evaluationResult.word_level_details || evaluationResult.words || [],
+          userAudioUri: audioUri, // Use local URI instead of uploaded URL
           referenceAudioUri: referenceAudioUri,
           language: selectedLanguage,
           voice: selectedVoice,
         });
 
-        console.log('Evaluation complete. Score:', score);
+        console.log('Evaluation complete. Overall Score:', evaluationResult.score);
       } else {
-        Alert.alert('Error', 'Failed to transcribe audio');
+        Alert.alert('Error', evaluationResult.error || 'Failed to evaluate pronunciation');
       }
     } catch (error) {
       console.error('Evaluation error:', error);
-      Alert.alert('Error', 'Failed to evaluate pronunciation');
+      Alert.alert('Error', 'Failed to evaluate pronunciation. Please try again.');
     } finally {
       setIsEvaluating(false);
     }
@@ -666,6 +703,10 @@ const SualingoScreen = ({ navigation, route }) => {
               reference_audio_uri: recordingData.referenceAudioUri,
               user_transcript: recordingData.userTranscript,
               pronunciation_score: recordingData.pronunciationScore,
+              accuracy_score: recordingData.accuracyScore,
+              fluency_score: recordingData.fluencyScore,
+              completeness_score: recordingData.completenessScore,
+              word_level_details: recordingData.wordLevelDetails || [],
               language_code: selectedLanguage,
             };
             
@@ -1112,22 +1153,70 @@ const SualingoScreen = ({ navigation, route }) => {
               {/* Score Display */}
               {pronunciationScore && (
                 <View style={styles.scoreCard}>
-                  <View style={styles.scoreHeader}>
-                    <Text style={styles.scoreLabel}>Your Score</Text>
+                  <PronunciationResult
+                    overallScore={pronunciationScore.score || 0}
+                    accuracy={pronunciationScore.accuracy_score}
+                    fluency={pronunciationScore.fluency_score}
+                    completeness={pronunciationScore.completeness_score}
+                    words={pronunciationScore.word_level_details || pronunciationScore.words || []}
+                    transcript={pronunciationScore.userText || ''}
+                    referenceText={pronunciationScore.original || ''}
+                    showTitle={true}
+                  />
+                  
+                  {/* Detailed Scores - 3 temel score progress bar'ları */}
+                  {(pronunciationScore.accuracy_score !== undefined || 
+                    pronunciationScore.fluency_score !== undefined || 
+                    pronunciationScore.completeness_score !== undefined) && (
+                    <View style={styles.detailedScoresContainer}>
+                      {pronunciationScore.accuracy_score !== undefined && (
+                        <View style={styles.detailedScoreItem}>
+                          <Text style={styles.detailedScoreLabel}>Accuracy</Text>
+                          <View style={styles.detailedScoreBar}>
                     <View
                       style={[
-                        styles.scoreBadge,
-                        pronunciationScore.score >= 85 && styles.scoreBadgeExcellent,
-                        pronunciationScore.score >= 70 && pronunciationScore.score < 85 && styles.scoreBadgeGood,
-                        pronunciationScore.score < 70 && styles.scoreBadgeNeedsWork,
-                      ]}
-                    >
-                      <Text style={styles.scoreValue}>{pronunciationScore.score}%</Text>
+                                styles.detailedScoreBarFill,
+                                { width: `${pronunciationScore.accuracy_score}%` }
+                              ]} 
+                            />
                     </View>
+                          <Text style={styles.detailedScoreValue}>{pronunciationScore.accuracy_score}%</Text>
                   </View>
+                      )}
+                      {pronunciationScore.fluency_score !== undefined && (
+                        <View style={styles.detailedScoreItem}>
+                          <Text style={styles.detailedScoreLabel}>Fluency</Text>
+                          <View style={styles.detailedScoreBar}>
+                            <View 
+                              style={[
+                                styles.detailedScoreBarFill,
+                                { width: `${pronunciationScore.fluency_score}%` }
+                              ]} 
+                            />
+                          </View>
+                          <Text style={styles.detailedScoreValue}>{pronunciationScore.fluency_score}%</Text>
+                        </View>
+                      )}
+                      {pronunciationScore.completeness_score !== undefined && (
+                        <View style={styles.detailedScoreItem}>
+                          <Text style={styles.detailedScoreLabel}>Completeness</Text>
+                          <View style={styles.detailedScoreBar}>
+                            <View 
+                              style={[
+                                styles.detailedScoreBarFill,
+                                { width: `${pronunciationScore.completeness_score}%` }
+                              ]} 
+                            />
+                          </View>
+                          <Text style={styles.detailedScoreValue}>{pronunciationScore.completeness_score}%</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                   
                   <Text style={styles.feedbackText}>{pronunciationScore.feedback}</Text>
                   
+                  {/* You said transcript section */}
                   <View style={styles.transcriptSection}>
                     <Text style={styles.transcriptLabel}>You said:</Text>
                     <Text style={styles.transcriptText}>"{pronunciationScore.userText}"</Text>
@@ -1474,6 +1563,36 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.white,
   },
+  detailedScoresContainer: {
+    marginTop: 12,
+    marginBottom: 16,
+    gap: 12,
+  },
+  detailedScoreItem: {
+    gap: 6,
+  },
+  detailedScoreLabel: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[400],
+    fontWeight: '500',
+  },
+  detailedScoreBar: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  detailedScoreBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+  },
+  detailedScoreValue: {
+    fontSize: SIZES.body3,
+    color: COLORS.textLight,
+    fontWeight: '600',
+    alignSelf: 'flex-end',
+  },
   feedbackText: {
     fontSize: SIZES.body2,
     color: COLORS.gray[300],
@@ -1536,6 +1655,72 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body2,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.6)',
+  },
+  detailedScoresContainer: {
+    marginTop: 12,
+    marginBottom: 16,
+    gap: 12,
+  },
+  detailedScoreItem: {
+    gap: 6,
+  },
+  detailedScoreLabel: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[400],
+    fontWeight: '500',
+  },
+  detailedScoreBar: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  detailedScoreBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+  },
+  detailedScoreValue: {
+    fontSize: SIZES.body3,
+    color: COLORS.textLight,
+    fontWeight: '600',
+    alignSelf: 'flex-end',
+  },
+  feedbackText: {
+    fontSize: SIZES.body2,
+    color: COLORS.gray[300],
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  transcriptSection: {
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  transcriptLabel: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[400],
+    marginBottom: 4,
+  },
+  transcriptText: {
+    fontSize: SIZES.body2,
+    color: COLORS.textLight,
+    fontStyle: 'italic',
+  },
+  playUserButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(19, 127, 236, 0.1)',
+  },
+  playUserText: {
+    fontSize: SIZES.body3,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
 });
 

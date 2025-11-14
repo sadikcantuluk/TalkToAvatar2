@@ -128,28 +128,92 @@ export const deleteRecording = async (recordingId) => {
 };
 
 /**
- * Evaluate pronunciation using backend Whisper integration
+ * Evaluate pronunciation by sending audio file directly to backend
+ * @param {FormData} formData - FormData containing audio_file, reference_text, language_code
+ * @param {string} referenceText - Original sentence (for backward compatibility)
+ * @param {string} languageCode - Language code (e.g., 'en', 'tr', 'de')
+ * @returns {Promise<Object>} Evaluation result with detailed scores and feedback
+ */
+export const evaluatePronunciationWithFile = async (formData, referenceText, languageCode = 'en') => {
+  try {
+    console.log('=== Evaluating Pronunciation via Backend (Direct File Upload) ===');
+    console.log('Reference:', referenceText);
+    console.log('Language:', languageCode);
+
+    const response = await apiClient.post('/evaluate', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    console.log('Evaluation complete. Overall Score:', response.data.overall_score || response.data.score);
+    console.log('Detailed Scores:', response.data.detailed_scores);
+    
+    return {
+      success: true,
+      transcript: response.data.transcript,
+      score: response.data.overall_score || response.data.score,
+      accuracy_score: response.data.accuracy || response.data.accuracy_score,
+      fluency_score: response.data.fluency || response.data.fluency_score,
+      completeness_score: response.data.completeness || response.data.completeness_score,
+      feedback: response.data.feedback,
+      word_level_details: response.data.words || response.data.word_level_details || [],
+      words: response.data.words || [],
+      detailed_scores: response.data.detailed_scores || {
+        overall: response.data.overall_score || response.data.score,
+        accuracy: response.data.accuracy || response.data.accuracy_score,
+        fluency: response.data.fluency || response.data.fluency_score,
+        completeness: response.data.completeness || response.data.completeness_score,
+      },
+    };
+  } catch (error) {
+    console.error('Evaluate pronunciation error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message,
+    };
+  }
+};
+
+/**
+ * Evaluate pronunciation using backend Azure Speech API integration (URL-based, for backward compatibility)
  * @param {string} audioUrl - Audio file URL (Supabase storage)
  * @param {string} referenceText - Original sentence
- * @returns {Promise<Object>} Evaluation result with score and feedback
+ * @param {string} languageCode - Language code (e.g., 'en', 'tr', 'de')
+ * @returns {Promise<Object>} Evaluation result with detailed scores and feedback
  */
-export const evaluatePronunciation = async (audioUrl, referenceText) => {
+export const evaluatePronunciation = async (audioUrl, referenceText, languageCode = 'en') => {
   try {
-    console.log('=== Evaluating Pronunciation via Backend ===');
+    console.log('=== Evaluating Pronunciation via Backend (Azure Speech API) ===');
     console.log('Audio URL:', audioUrl);
     console.log('Reference:', referenceText);
+    console.log('Language:', languageCode);
 
     const response = await apiClient.post('/evaluate', {
       audio_url: audioUrl,
       reference_text: referenceText,
+      language_code: languageCode,
     });
 
-    console.log('Evaluation complete. Score:', response.data.score);
+    console.log('Evaluation complete. Overall Score:', response.data.overall_score || response.data.score);
+    console.log('Detailed Scores:', response.data.detailed_scores);
+    
     return {
       success: true,
       transcript: response.data.transcript,
-      score: response.data.score,
+      score: response.data.overall_score || response.data.score, // Overall score for backward compatibility
+      accuracy_score: response.data.accuracy || response.data.accuracy_score,
+      fluency_score: response.data.fluency || response.data.fluency_score,
+      completeness_score: response.data.completeness || response.data.completeness_score,
       feedback: response.data.feedback,
+      word_level_details: response.data.words || response.data.word_level_details || [],
+      words: response.data.words || [],
+      detailed_scores: response.data.detailed_scores || {
+        overall: response.data.overall_score || response.data.score,
+        accuracy: response.data.accuracy || response.data.accuracy_score,
+        fluency: response.data.fluency || response.data.fluency_score,
+        completeness: response.data.completeness || response.data.completeness_score,
+      },
     };
   } catch (error) {
     console.error('Evaluate pronunciation error:', error);

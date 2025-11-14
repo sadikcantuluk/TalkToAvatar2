@@ -1,8 +1,11 @@
-require 'supabase'
+require 'httparty'
 
 module Api
   module V1
     class AudioController < ApplicationController
+      # Skip authentication for upload and evaluate endpoints
+      skip_before_action :authenticate_request, only: [:upload, :evaluate]
+      
       # POST /api/v1/upload_audio
       def upload
         audio_file = params[:audio]
@@ -12,78 +15,175 @@ module Api
         end
 
         begin
-          # Upload to Supabase storage
-          supabase = Supabase::Client.new(
-            ENV['SUPABASE_URL'],
-            ENV['SUPABASE_SERVICE_KEY']
-          )
+          Rails.logger.info "Audio upload started. File: #{audio_file.original_filename rescue 'unknown'}"
+          
+          # Supabase configuration
+          # Support both SUPABASE_SERVICE_KEY and SUPABASE_API_KEY for backward compatibility
+          supabase_url = ENV['SUPABASE_URL']
+          supabase_service_key = ENV['SUPABASE_SERVICE_KEY'] || ENV['SUPABASE_API_KEY']
+          
+          unless supabase_url && supabase_service_key
+            missing_vars = []
+            missing_vars << 'SUPABASE_URL' unless supabase_url
+            unless supabase_service_key
+              missing_vars << 'SUPABASE_SERVICE_KEY (or SUPABASE_API_KEY)'
+            end
+            
+            error_msg = "Supabase configuration missing. Please add to .env file: #{missing_vars.join(', ')}"
+            Rails.logger.error error_msg
+            Rails.logger.error "Current ENV keys: SUPABASE_URL=#{supabase_url ? 'SET' : 'MISSING'}, SUPABASE_SERVICE_KEY=#{ENV['SUPABASE_SERVICE_KEY'] ? 'SET' : 'MISSING'}, SUPABASE_API_KEY=#{ENV['SUPABASE_API_KEY'] ? 'SET' : 'MISSING'}"
+            return render json: { 
+              error: error_msg,
+              missing_variables: missing_vars,
+              help: 'Add these to your backend/.env file: SUPABASE_URL=https://your-project.supabase.co and SUPABASE_SERVICE_KEY=your_service_role_key (or use SUPABASE_API_KEY if you have service_role key there)'
+            }, status: :internal_server_error
+          end
+          
+          Rails.logger.info "Using Supabase URL: #{supabase_url}"
+          Rails.logger.info "Using Supabase key: #{ENV['SUPABASE_SERVICE_KEY'] ? 'SUPABASE_SERVICE_KEY' : 'SUPABASE_API_KEY'}"
+
+          # Remove trailing slash from URL
+          supabase_url = supabase_url.chomp('/')
 
           # Generate unique filename
-          filename = "#{SecureRandom.uuid}_#{Time.now.to_i}.m4a"
+          original_filename = audio_file.original_filename rescue 'recording.m4a'
+          file_extension = File.extname(original_filename) || '.m4a'
+          filename = "#{SecureRandom.uuid}_#{Time.now.to_i}#{file_extension}"
           bucket_name = 'sualingo-recordings'
 
-          # Upload file
+          # Read file content
+          audio_file.rewind if audio_file.respond_to?(:rewind)
           file_content = audio_file.read
-          response = supabase.storage
-            .from(bucket_name)
-            .upload(filename, file_content, content_type: 'audio/m4a')
+          
+          Rails.logger.info "File size: #{file_content.bytesize} bytes"
+          
+          # Upload to Supabase Storage using REST API
+          # Endpoint: POST /storage/v1/object/{bucket}/{path}
+          upload_url = "#{supabase_url}/storage/v1/object/#{bucket_name}/#{filename}"
+          
+          Rails.logger.info "Uploading to: #{upload_url}"
+          
+          upload_response = HTTParty.post(
+            upload_url,
+            body: file_content,
+            headers: {
+              'Authorization' => "Bearer #{supabase_service_key}",
+              'Content-Type' => audio_file.content_type || 'audio/m4a',
+              'x-upsert' => 'true' # Overwrite if exists
+            },
+            timeout: 30
+          )
 
-          # Get public URL
-          public_url = supabase.storage
-            .from(bucket_name)
-            .get_public_url(filename)
+          Rails.logger.info "Upload response code: #{upload_response.code}"
+          Rails.logger.info "Upload response: #{upload_response.body}"
 
-          render json: { url: public_url }, status: :ok
+          if upload_response.success?
+            # Get public URL
+            # Format: {supabase_url}/storage/v1/object/public/{bucket}/{path}
+            public_url = "#{supabase_url}/storage/v1/object/public/#{bucket_name}/#{filename}"
+            
+            Rails.logger.info "Public URL: #{public_url}"
+
+            render json: { url: public_url }, status: :ok
+          else
+            Rails.logger.error "Supabase upload failed: #{upload_response.code} - #{upload_response.body}"
+            render json: { error: "Upload failed: #{upload_response.body}" }, status: :internal_server_error
+          end
         rescue => e
           Rails.logger.error "Audio upload error: #{e.message}"
-          render json: { error: 'Failed to upload audio' }, status: :internal_server_error
+          Rails.logger.error e.backtrace.join("\n")
+          render json: { error: "Failed to upload audio: #{e.message}" }, status: :internal_server_error
         end
       end
 
       # POST /api/v1/evaluate
+      # Accepts either audio_file (multipart) or audio_url (JSON)
       def evaluate
+        audio_file = params[:audio_file] || params[:audio]
         audio_url = params[:audio_url]
         reference_text = params[:reference_text]
+        language_code = params[:language_code] || 'en'
 
-        unless audio_url && reference_text
-          return render json: { error: 'Missing required parameters' }, status: :bad_request
+        unless reference_text
+          return render json: { error: 'Missing required parameter: reference_text' }, status: :bad_request
+        end
+
+        unless audio_file || audio_url
+          return render json: { error: 'Missing required parameter: audio_file or audio_url' }, status: :bad_request
         end
 
         begin
-          # Use OpenAI Whisper to transcribe
-          client = OpenAI::Client.new(access_token: ENV['OPENAI_API_KEY'])
-          
-          # Download audio file temporarily
-          audio_data = HTTParty.get(audio_url).body
-          temp_file = Tempfile.new(['audio', '.m4a'])
-          temp_file.binmode
-          temp_file.write(audio_data)
-          temp_file.rewind
+          # If audio file is provided, save it temporarily and use its path
+          # Otherwise, use the provided audio_url
+          if audio_file
+            Rails.logger.info "Processing uploaded audio file: #{audio_file.original_filename rescue 'unknown'}"
+            
+            # Save uploaded file temporarily
+            temp_file = Tempfile.new(['audio', '.m4a'])
+            temp_file.binmode
+            audio_file.rewind if audio_file.respond_to?(:rewind)
+            temp_file.write(audio_file.read)
+            temp_file.rewind
+            
+            # Create a local file URL for Azure service
+            # Azure service will read from this local path
+            audio_path = temp_file.path
+            
+            Rails.logger.info "Temporary file saved: #{audio_path}"
+            
+            # Use Azure Speech API for pronunciation assessment
+            azure_service = AzureSpeechService.new
+            assessment_result = azure_service.assess_pronunciation_from_file(
+              audio_path,
+              reference_text,
+              language_code
+            )
+            
+            # Clean up temp file
+            temp_file.close
+            temp_file.unlink
+          else
+            # Use existing URL-based method
+            Rails.logger.info "Processing audio from URL: #{audio_url}"
+            azure_service = AzureSpeechService.new
+            assessment_result = azure_service.assess_pronunciation_simple(
+              audio_url,
+              reference_text,
+              language_code
+            )
+          end
 
-          # Transcribe with Whisper
-          response = client.audio.transcribe(
-            parameters: {
-              model: 'whisper-1',
-              file: temp_file
-            }
-          )
-
-          temp_file.close
-          temp_file.unlink
-
-          transcript = response['text']
-          
-          # Calculate pronunciation score
-          score = calculate_pronunciation_score(reference_text, transcript)
-          feedback = generate_feedback(score)
-
-          render json: {
-            transcript: transcript,
-            score: score,
-            feedback: feedback
-          }, status: :ok
+          if assessment_result[:success]
+            # Return response in required format: overall_score, accuracy, fluency, words[]
+            render json: {
+              overall_score: assessment_result[:overall_score],
+              accuracy: assessment_result[:accuracy],
+              fluency: assessment_result[:fluency],
+              completeness: assessment_result[:completeness],
+              words: assessment_result[:words] || [],
+              transcript: assessment_result[:transcript],
+              reference_text: assessment_result[:reference_text],
+              # Additional fields for backward compatibility
+              score: assessment_result[:overall_score],
+              accuracy_score: assessment_result[:accuracy],
+              fluency_score: assessment_result[:fluency],
+              completeness_score: assessment_result[:completeness],
+              word_level_details: assessment_result[:words] || [],
+              feedback: generate_feedback(assessment_result[:overall_score]),
+              detailed_scores: {
+                overall: assessment_result[:overall_score],
+                accuracy: assessment_result[:accuracy],
+                fluency: assessment_result[:fluency],
+                completeness: assessment_result[:completeness]
+              }
+            }, status: :ok
+          else
+            Rails.logger.error "Azure Speech assessment failed: #{assessment_result[:error]}"
+            render json: { error: assessment_result[:error] || 'Failed to evaluate pronunciation' }, status: :internal_server_error
+          end
         rescue => e
           Rails.logger.error "Evaluation error: #{e.message}"
+          Rails.logger.error e.backtrace.join("\n")
           render json: { error: 'Failed to evaluate pronunciation' }, status: :internal_server_error
         end
       end

@@ -8,21 +8,31 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../constants';
 import { RecordingCardSkeleton, SkeletonList } from '../components/SkeletonComponents';
+import PronunciationResult from '../components/PronunciationResult';
 import { playAudio, stopAudio } from '../services/openAI';
 import { useAuth } from '../context';
 import recordingsAPI from '../services/recordingsAPI';
 import { getUserStorageKey } from '../utils/userStorage';
 import { useUserData } from '../hooks/useUserData';
 
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const PastRecordingsListScreen = ({ navigation }) => {
   const { token, user } = useAuth();
   const { data: recordings, loading: isLoading, setData: setRecordings } = useUserData('recordings');
   const [playingId, setPlayingId] = useState(null);
+  const [showReportDetails, setShowReportDetails] = useState({});
 
   useEffect(() => {
     return () => {
@@ -58,14 +68,6 @@ const PastRecordingsListScreen = ({ navigation }) => {
       setPlayingId(null);
       Alert.alert('Error', 'Failed to play recording');
     }
-  };
-
-  const handleViewScore = (recording) => {
-    Alert.alert(
-      'Score Report',
-      `Level: ${recording.level}\n\nSentence: "${recording.sentence}"\n\nYou said: "${recording.userTranscript}"\n\nScore: ${recording.score}%\n\nLanguage: ${recording.language}\nVoice: ${recording.voice}`,
-      [{ text: 'OK' }]
-    );
   };
 
   const handleDeleteRecording = (recording) => {
@@ -129,13 +131,13 @@ const PastRecordingsListScreen = ({ navigation }) => {
     });
   };
 
-  const getScoreColor = (score) => {
-    if (score >= 85) return '#10b981';
-    if (score >= 70) return '#f59e0b';
-    return '#ef4444';
+  const toggleReport = (id) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowReportDetails(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const renderRecordingItem = ({ item }) => (
+  const renderRecordingItem = ({ item }) => {
+    return (
     <View style={styles.recordingCard}>
       <View style={styles.recordingHeader}>
         <View style={styles.recordingInfo}>
@@ -145,7 +147,10 @@ const PastRecordingsListScreen = ({ navigation }) => {
         <View
           style={[
             styles.scoreBadge,
-            { backgroundColor: getScoreColor(item.score) },
+            { 
+              backgroundColor: (item.pronunciationScore || item.score || 0) >= 85 ? '#10b981' :
+                               (item.pronunciationScore || item.score || 0) >= 70 ? '#f59e0b' : '#ef4444'
+            },
           ]}
         >
           <Text style={styles.scoreText}>{item.pronunciationScore || item.score || 0}%</Text>
@@ -176,10 +181,12 @@ const PastRecordingsListScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.actionButton, styles.actionButtonInfo]}
-          onPress={() => handleViewScore(item)}
+          onPress={() => toggleReport(item.id)}
         >
           <Ionicons name="stats-chart" size={20} color={COLORS.white} />
-          <Text style={styles.actionButtonText}>Report</Text>
+          <Text style={styles.actionButtonText}>
+            {showReportDetails[item.id] ? 'Raporu Gizle' : 'Raporu Gör'}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -189,8 +196,86 @@ const PastRecordingsListScreen = ({ navigation }) => {
           <Ionicons name="trash-outline" size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
+
+      {/* Inline Report Details */}
+      {showReportDetails[item.id] && (
+        <View style={styles.reportDetailsContainer}>
+          <PronunciationResult
+            overallScore={item.pronunciation_score || item.score || 0}
+            accuracy={item.accuracy || item.accuracy_score}
+            fluency={item.fluency || item.fluency_score}
+            completeness={item.completeness || item.completeness_score}
+            words={item.words || item.word_level_details || []}
+            transcript={item.user_transcript || item.transcript || item.userTranscript || ''}
+            referenceText={item.reference_text || item.sentence || ''}
+            showTitle={true}
+          />
+          
+          {/* Detailed Scores - 3 temel score progress bar'ları */}
+          {((item.accuracy !== undefined && item.accuracy !== null) || 
+            (item.accuracy_score !== undefined && item.accuracy_score !== null) ||
+            (item.fluency !== undefined && item.fluency !== null) || 
+            (item.fluency_score !== undefined && item.fluency_score !== null) ||
+            (item.completeness !== undefined && item.completeness !== null) || 
+            (item.completeness_score !== undefined && item.completeness_score !== null)) && (
+            <View style={styles.detailedScoresContainer}>
+              {(item.accuracy !== undefined && item.accuracy !== null) || (item.accuracy_score !== undefined && item.accuracy_score !== null) ? (
+                <View style={styles.detailedScoreItem}>
+                  <Text style={styles.detailedScoreLabel}>Accuracy</Text>
+                  <View style={styles.detailedScoreBar}>
+                    <View 
+                      style={[
+                        styles.detailedScoreBarFill,
+                        { width: `${item.accuracy || item.accuracy_score || 0}%` }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={styles.detailedScoreValue}>{item.accuracy || item.accuracy_score || 0}%</Text>
+                </View>
+              ) : null}
+              {(item.fluency !== undefined && item.fluency !== null) || (item.fluency_score !== undefined && item.fluency_score !== null) ? (
+                <View style={styles.detailedScoreItem}>
+                  <Text style={styles.detailedScoreLabel}>Fluency</Text>
+                  <View style={styles.detailedScoreBar}>
+                    <View 
+                      style={[
+                        styles.detailedScoreBarFill,
+                        { width: `${item.fluency || item.fluency_score || 0}%` }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={styles.detailedScoreValue}>{item.fluency || item.fluency_score || 0}%</Text>
+                </View>
+              ) : null}
+              {(item.completeness !== undefined && item.completeness !== null) || (item.completeness_score !== undefined && item.completeness_score !== null) ? (
+                <View style={styles.detailedScoreItem}>
+                  <Text style={styles.detailedScoreLabel}>Completeness</Text>
+                  <View style={styles.detailedScoreBar}>
+                    <View 
+                      style={[
+                        styles.detailedScoreBarFill,
+                        { width: `${item.completeness || item.completeness_score || 0}%` }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={styles.detailedScoreValue}>{item.completeness || item.completeness_score || 0}%</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+          
+          {/* You said transcript section */}
+          {(item.user_transcript || item.transcript || item.userTranscript) && (
+            <View style={styles.transcriptSection}>
+              <Text style={styles.transcriptLabel}>You said:</Text>
+              <Text style={styles.transcriptText}>"{item.user_transcript || item.transcript || item.userTranscript}"</Text>
+            </View>
+          )}
+        </View>
+      )}
     </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -394,6 +479,56 @@ const styles = StyleSheet.create({
     fontSize: SIZES.body3,
     fontWeight: '600',
     color: COLORS.white,
+  },
+  // Report Details Styles
+  reportDetailsContainer: {
+    marginTop: 12,
+  },
+  detailedScoresContainer: {
+    marginTop: 12,
+    marginBottom: 16,
+    gap: 12,
+  },
+  detailedScoreItem: {
+    gap: 6,
+  },
+  detailedScoreLabel: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[400],
+    fontWeight: '500',
+  },
+  detailedScoreBar: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  detailedScoreBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+  },
+  detailedScoreValue: {
+    fontSize: SIZES.body3,
+    color: COLORS.textLight,
+    fontWeight: '600',
+    alignSelf: 'flex-end',
+  },
+  transcriptSection: {
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  transcriptLabel: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[400],
+    marginBottom: 4,
+  },
+  transcriptText: {
+    fontSize: SIZES.body2,
+    color: COLORS.textLight,
+    fontStyle: 'italic',
   },
 });
 

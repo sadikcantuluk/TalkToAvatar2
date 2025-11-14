@@ -1,3 +1,5 @@
+require 'json'
+
 module Api
   module V1
     class RecordingsController < ApplicationController
@@ -6,10 +8,45 @@ module Api
         # Map frontend params to backend format
         # Frontend sends: level, sentence, user_transcript, language_code, user_audio_uri, reference_audio_uri, pronunciation_score
         # Backend expects: level, transcript (user_transcript), reference_text (sentence), score (pronunciation_score), local_uri (user_audio_uri), language_code
+        # Permit basic parameters first
         recording_params = params.require(:recording).permit(
           :level, :sentence, :user_transcript, :language_code, 
-          :user_audio_uri, :reference_audio_uri, :pronunciation_score
+          :user_audio_uri, :reference_audio_uri, :pronunciation_score,
+          :accuracy_score, :fluency_score, :completeness_score
         )
+        
+        # Manually handle word_level_details array (Rails strong parameters doesn't handle array of hashes well)
+        word_level_details = []
+        if params[:recording][:word_level_details].present?
+          word_level_details_raw = params[:recording][:word_level_details]
+          
+          # Handle both array and JSON string
+          word_level_details = if word_level_details_raw.is_a?(Array)
+            # Clean each hash in the array - only allow permitted keys
+            word_level_details_raw.map do |word_hash|
+              if word_hash.is_a?(Hash) || word_hash.is_a?(ActionController::Parameters)
+                word_hash = word_hash.to_unsafe_h if word_hash.is_a?(ActionController::Parameters)
+                {
+                  'word' => word_hash['word'] || word_hash[:word],
+                  'accuracy_score' => (word_hash['accuracy_score'] || word_hash[:accuracy_score] || 0).to_f,
+                  'error_type' => word_hash['error_type'] || word_hash[:error_type],
+                  'offset' => (word_hash['offset'] || word_hash[:offset] || 0).to_i,
+                  'duration' => (word_hash['duration'] || word_hash[:duration] || 0).to_i
+                }
+              else
+                nil
+              end
+            end.compact
+          elsif word_level_details_raw.is_a?(String)
+            begin
+              JSON.parse(word_level_details_raw)
+            rescue JSON::ParserError
+              []
+            end
+          else
+            []
+          end
+        end
 
         # Build recording with mapped parameters
         # Ensure required fields are present
@@ -34,13 +71,34 @@ module Api
         # Ensure score is within valid range
         score_value = [[score_value, 0].max, 100].min
         
+        # Extract detailed scores
+        accuracy = recording_params[:accuracy_score] ? recording_params[:accuracy_score].to_f : 0.0
+        fluency = recording_params[:fluency_score] ? recording_params[:fluency_score].to_f : 0.0
+        completeness = recording_params[:completeness_score] ? recording_params[:completeness_score].to_f : 0.0
+        
+        # Use word_level_details (already processed above)
+        words = word_level_details
+        
+        Rails.logger.info "=== Saving Recording with Word Details ==="
+        Rails.logger.info "Word level details count: #{words.length}"
+        Rails.logger.info "Word level details sample: #{words.first(3).inspect}" if words.any?
+        
+        # Ensure scores are within valid range
+        accuracy = [[accuracy, 0].max, 100].min
+        fluency = [[fluency, 0].max, 100].min
+        completeness = [[completeness, 0].max, 100].min
+        
         recording = current_user.recordings.build(
           level: recording_params[:level],
           transcript: recording_params[:user_transcript] || '',
           reference_text: recording_params[:sentence] || '',
           score: score_value,
           local_uri: user_audio_uri,
-          language_code: recording_params[:language_code]
+          language_code: recording_params[:language_code],
+          accuracy: accuracy,
+          fluency: fluency,
+          completeness: completeness,
+          words: words
         )
 
         if recording.save
@@ -53,6 +111,10 @@ module Api
               reference_text: recording.reference_text,
               score: recording.score,
               language_code: recording.language_code,
+              accuracy: recording.accuracy,
+              fluency: recording.fluency,
+              completeness: recording.completeness,
+              words: recording.words,
               created_at: recording.created_at
             }
           }, status: :created
@@ -74,6 +136,10 @@ module Api
             score: recording.score,
             language_code: recording.language_code,
             local_uri: recording.local_uri,
+            accuracy: recording.accuracy,
+            fluency: recording.fluency,
+            completeness: recording.completeness,
+            words: recording.words,
             created_at: recording.created_at
           }
         }, status: :ok
@@ -96,6 +162,10 @@ module Api
           score: recording.score,
           language_code: recording.language_code,
           local_uri: recording.local_uri,
+          accuracy: recording.accuracy,
+          fluency: recording.fluency,
+          completeness: recording.completeness,
+          words: recording.words,
           created_at: recording.created_at,
           updated_at: recording.updated_at
         }, status: :ok
