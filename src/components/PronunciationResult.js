@@ -146,7 +146,12 @@ const PronunciationResult = ({
         <View style={styles.inlineDetailsContainer}>
           <Text style={styles.inlineDetailsTitle}>📊 Kelime Seviyesi Analiz</Text>
           
-          <ScrollView style={styles.inlineDetailsScrollView} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.inlineDetailsScrollView} 
+            contentContainerStyle={styles.inlineDetailsScrollContent}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+          >
             {processedWords.length > 0 ? (
               <View style={styles.wordsContainer}>
                 {processedWords.map((word, index) => (
@@ -273,8 +278,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inlineDetailsScrollView: {
-    maxHeight: 300,
+    maxHeight: 200,
     marginBottom: 16,
+  },
+  inlineDetailsScrollContent: {
+    paddingBottom: 8,
   },
   wordsContainer: {
     marginBottom: 12,

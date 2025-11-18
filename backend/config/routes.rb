@@ -15,7 +15,8 @@ Rails.application.routes.draw do
       delete '/auth/delete_account', to: 'auth#delete_account'
       
       # Users
-      post '/users', to: 'users#create'
+      resources :users, only: [:index, :show, :create]
+      get '/users/:id/courses', to: 'users#courses'
       
       # Sentences
       get '/sentences', to: 'sentences#index'
@@ -50,6 +51,31 @@ Rails.application.routes.draw do
       
       # Conversations
       resources :conversations, only: [:index, :create, :show, :destroy]
+      
+      # Courses (Sualingo Mode)
+      resources :courses, only: [:index, :create, :show, :update, :destroy]
+      get '/courses/:id/subjects', to: 'courses#subjects'
+      get '/courses/:id/videos', to: 'courses#videos'
+      get '/courses/:id/reports', to: 'courses#reports'
+      get '/courses/:id/analyses', to: 'courses#analyses'
+      get '/courses/:id/recordings', to: 'courses#recordings'
+      get '/courses/:id/practice_sentences', to: 'courses#practice_sentences'
+      get '/courses/:id/progress', to: 'courses#progress'
+      
+      # Practice Sentences
+      resources :practice_sentences, only: [:index, :show]
+      
+      # User Course Progress
+      resources :user_course_progresses, only: [:index, :create, :update]
+      
+      # Subjects (Sualingo Mode)
+      resources :subjects, only: [:index, :create, :show, :update, :destroy]
+      
+      # Reports (Sualingo Mode)
+      resources :reports, only: [:index, :create, :show, :update, :destroy]
+      
+      # Analyses (Sualingo Mode)
+      resources :analyses, only: [:index, :create, :show, :update, :destroy]
     end
   end
 

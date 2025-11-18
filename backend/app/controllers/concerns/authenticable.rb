@@ -26,5 +26,11 @@ module Authenticable
   def current_user
     @current_user
   end
+
+  def authenticate_user!
+    unless current_user
+      render json: { error: 'Unauthorized' }, status: :unauthorized
+    end
+  end
 end
 

@@ -16,6 +16,8 @@ class User < ApplicationRecord
   has_many :videos, dependent: :destroy
   has_many :conversations, dependent: :destroy
   has_many :audios, dependent: :destroy
+  has_many :courses, dependent: :destroy
+  has_many :user_course_progresses, dependent: :destroy
 
   # Callbacks
   before_create :set_uuid

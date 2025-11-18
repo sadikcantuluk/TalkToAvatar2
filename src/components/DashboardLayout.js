@@ -12,7 +12,7 @@ const modes = [
   { id: 'sualingo', name: 'Sualingo Mode', icon: 'language' },
 ];
 
-const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation }) => {
+const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation, hideHeader = false }) => {
   const [modeModalVisible, setModeModalVisible] = useState(false);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const swipeableRefs = useRef({});
@@ -23,15 +23,17 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
   const handleModeSelect = (mode) => {
     setModeModalVisible(false);
     
-    // Direct navigation based on mode
-    if (mode.id === 'tts') {
-      navigation.navigate('Dashboard');
-    } else if (mode.id === 'video') {
-      navigation.navigate('AvatarToVideo');
-    } else if (mode.id === 'travel') {
-      navigation.navigate('TravelAssistant');
-    } else if (mode.id === 'sualingo') {
-      navigation.navigate('Sualingo');
+    // Direct navigation based on mode (only if navigation is available)
+    if (navigation) {
+      if (mode.id === 'tts') {
+        navigation.navigate('Dashboard');
+      } else if (mode.id === 'video') {
+        navigation.navigate('AvatarToVideo');
+      } else if (mode.id === 'travel') {
+        navigation.navigate('TravelAssistant');
+      } else if (mode.id === 'sualingo') {
+        navigation.navigate('Sualingo');
+      }
     }
     
     // Also call onModeChange if provided (for internal state updates)
@@ -71,6 +73,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
   return (
     <View style={styles.container}>
       {/* Fixed Header */}
+      {!hideHeader && (
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.notificationButton}
@@ -104,6 +107,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
           <Ionicons name="person-circle-outline" size={24} color={COLORS.textLight} />
         </TouchableOpacity>
       </View>
+      )}
 
       {/* Content */}
       {children}

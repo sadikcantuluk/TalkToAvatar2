@@ -3,6 +3,11 @@ module Api
     class NotificationsController < ApplicationController
       # GET /api/v1/notifications
       def index
+        unless current_user
+          render json: { error: 'Unauthorized' }, status: :unauthorized
+          return
+        end
+
         notifications = current_user.notifications.recent
         
         render json: notifications.map { |n| 

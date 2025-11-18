@@ -30,11 +30,16 @@ import { useAuth, useToast } from '../context';
 import recordingsAPI from '../services/recordingsAPI';
 import { getUserStorageKey } from '../utils/userStorage';
 import { evaluatePronunciationWithFile } from '../services/railsAPI';
+import practiceSentencesAPI from '../services/practiceSentencesAPI';
+import userCourseProgressAPI from '../services/userCourseProgressAPI';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// Success threshold for course completion
+const SUCCESS_THRESHOLD = 85;
 
 // Dil seviyeleri
 const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -142,6 +147,7 @@ const SualingoScreen = ({ navigation, route }) => {
   // Ses ve dil
   const [selectedVoice, setSelectedVoice] = useState('nova');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
+  
 
   // Kayıt ve oynatma
   const [isRecording, setIsRecording] = useState(false);
@@ -162,9 +168,25 @@ const SualingoScreen = ({ navigation, route }) => {
   const avatarOpacity = useRef(new Animated.Value(1)).current;
   const pulseAnimationRef = useRef(null);
 
+  // Course context from navigation
+  const courseContext = route?.params?.fromCourse ? {
+    courseId: route.params.courseId,
+    course: route.params.course,
+    topic: route.params.topic,
+    topicTitle: route.params.topicTitle,
+  } : null;
+
   useEffect(() => {
-    // Auto-load A1 sentences on mount
-    handleLevelSelect('A1');
+    // If coming from course, load course sentences
+    if (courseContext) {
+      console.log('📚 [DEBUG] Loading course practice sentences:', courseContext);
+      setSelectedLanguage(courseContext.course?.language_code || 'en');
+      setSelectedLevel(courseContext.course?.level || 'A1');
+      fetchCourseSentences();
+    } else {
+      // Auto-load A1 sentences on mount
+      handleLevelSelect('A1');
+    }
     
     return () => {
       stopAudio();
@@ -238,8 +260,13 @@ const SualingoScreen = ({ navigation, route }) => {
     }
   }, [isPlayingReference, isPlayingUser, selectedDisplayMode]);
 
-  // Handle language change - translate sentences
+  // Handle language change - translate sentences (only if not in course context)
   useEffect(() => {
+    if (courseContext) {
+      // Don't translate if in course context
+      return;
+    }
+    
     if (selectedLevel && selectedLanguage !== 'en') {
       translateSentences();
     } else if (selectedLevel && selectedLanguage === 'en') {
@@ -247,6 +274,37 @@ const SualingoScreen = ({ navigation, route }) => {
       setSentences(BASE_SENTENCES[selectedLevel] || []);
     }
   }, [selectedLanguage]);
+
+  // Fetch course practice sentences
+  const fetchCourseSentences = async () => {
+    if (!courseContext || !courseContext.courseId || !courseContext.topic) {
+      console.error('❌ [ERROR] Missing course context');
+      return;
+    }
+
+    try {
+      console.log('📚 [DEBUG] Fetching course practice sentences...');
+      setIsLoadingSentences(true);
+      
+      const data = await practiceSentencesAPI.getByCourse(
+        token,
+        courseContext.courseId,
+        courseContext.topic
+      );
+      
+      console.log('✅ [DEBUG] Fetched course sentences:', data.length);
+      
+      // Keep sentence objects (with id) for progress tracking
+      setSentences(data);
+      setCurrentSentenceIndex(0);
+    } catch (err) {
+      console.error('❌ [ERROR] Failed to fetch course sentences:', err);
+      showError('Failed to load practice sentences');
+      setSentences([]);
+    } finally {
+      setIsLoadingSentences(false);
+    }
+  };
 
   const fetchSentencesFromBackend = async (level, languageCode) => {
     try {
@@ -403,13 +461,114 @@ const SualingoScreen = ({ navigation, route }) => {
 
   const getCurrentSentence = () => {
     if (!sentences || sentences.length === 0) return null;
-    return sentences[currentSentenceIndex];
+    const sentence = sentences[currentSentenceIndex];
+    // If in course context, sentences are objects with id, otherwise strings
+    if (courseContext && typeof sentence === 'object') {
+      return sentence;
+    }
+    return typeof sentence === 'string' ? sentence : (sentence?.sentence || sentence?.text || sentence);
+  };
+
+  // Save user progress for course practice
+  const saveUserProgress = async (sentenceId, evaluationResult) => {
+    console.log('🎯 [DEBUG] saveUserProgress called');
+    console.log('📊 [DEBUG] Parameters:', {
+      sentenceId,
+      hasCourseContext: !!courseContext,
+      courseId: courseContext?.courseId,
+      evaluationResult: {
+        score: evaluationResult.score,
+        accuracy: evaluationResult.accuracy_score,
+        fluency: evaluationResult.fluency_score,
+        completeness: evaluationResult.completeness_score
+      }
+    });
+
+    if (!courseContext || !courseContext.courseId || !sentenceId) {
+      console.log('⚠️ [DEBUG] Missing context for progress save:', {
+        hasCourseContext: !!courseContext,
+        courseId: courseContext?.courseId,
+        sentenceId: sentenceId
+      });
+      return;
+    }
+
+    try {
+      console.log('📊 [DEBUG] Saving user progress for sentence:', sentenceId);
+      console.log('📊 [DEBUG] Course ID:', courseContext.courseId);
+      console.log('📊 [DEBUG] Evaluation result:', {
+        score: evaluationResult.score,
+        accuracy_score: evaluationResult.accuracy_score,
+        fluency_score: evaluationResult.fluency_score,
+        completeness_score: evaluationResult.completeness_score
+      });
+      
+      const isCompleted = evaluationResult.score >= SUCCESS_THRESHOLD;
+      console.log('📊 [DEBUG] Completion status:', isCompleted, `(score >= ${SUCCESS_THRESHOLD})`);
+      
+      const progressData = {
+        course_id: courseContext.courseId,
+        practice_sentence_id: sentenceId,  // ✅ Correct parameter name
+        completed: isCompleted,
+        score: evaluationResult.score,
+        // Note: accuracy_score, fluency_score, completeness_score are not in database schema
+        // Note: last_practiced_at is automatically updated by model callback
+      };
+
+      console.log('📤 [DEBUG] Progress data to send:', progressData);
+
+      // Try to update existing progress, or create new
+      console.log('🔍 [DEBUG] Checking for existing progress...');
+      const existingProgress = await userCourseProgressAPI.getAll(token, {
+        course_id: courseContext.courseId,
+        practice_sentence_id: sentenceId,  // ✅ Correct parameter name
+      });
+
+      console.log('📊 [DEBUG] Existing progress found:', existingProgress?.length || 0);
+      if (existingProgress && existingProgress.length > 0) {
+        console.log('📊 [DEBUG] Existing progress details:', existingProgress[0]);
+      }
+
+      if (existingProgress && existingProgress.length > 0) {
+        // Update existing
+        const progressId = existingProgress[0].id || existingProgress[0].sentence_id;
+        console.log('🔄 [DEBUG] Updating existing progress:', progressId);
+        console.log('📊 [DEBUG] Current progress state:', existingProgress[0]);
+        
+        const response = await userCourseProgressAPI.update(token, progressId, progressData);
+        console.log('✅ [DEBUG] Updated user progress:', response);
+      } else {
+        // Create new
+        console.log('➕ [DEBUG] Creating new progress record');
+        const response = await userCourseProgressAPI.create(token, progressData);
+        console.log('✅ [DEBUG] Created user progress:', response);
+      }
+    } catch (err) {
+      console.error('❌ [ERROR] Failed to save user progress:', err);
+      console.error('❌ [ERROR] Error details:', {
+        message: err.message,
+        response: err.response,
+        data: err.response?.data,
+        status: err.response?.status
+      });
+      // Don't show error to user, progress saving is non-critical
+    }
   };
 
   const handlePlayReference = async () => {
-    const sentence = getCurrentSentence();
-    if (!sentence) {
+    const sentenceObj = getCurrentSentence();
+    if (!sentenceObj) {
       Alert.alert('Error', 'No sentence selected');
+      return;
+    }
+    
+    // Get sentence text (handle both string and object)
+    const sentence = typeof sentenceObj === 'string' 
+      ? sentenceObj 
+      : (sentenceObj.sentence || sentenceObj.text || '');
+    
+    if (!sentence) {
+      Alert.alert('Error', 'No sentence text available');
       return;
     }
 
@@ -472,9 +631,19 @@ const SualingoScreen = ({ navigation, route }) => {
   };
 
   const handleRecordUser = async () => {
-    const sentence = getCurrentSentence();
-    if (!sentence) {
+    const sentenceObj = getCurrentSentence();
+    if (!sentenceObj) {
       Alert.alert('Error', 'No sentence selected');
+      return;
+    }
+    
+    // Get sentence text (handle both string and object)
+    const sentence = typeof sentenceObj === 'string' 
+      ? sentenceObj 
+      : (sentenceObj.sentence || sentenceObj.text || '');
+    
+    if (!sentence) {
+      Alert.alert('Error', 'No sentence text available');
       return;
     }
 
@@ -566,6 +735,9 @@ const SualingoScreen = ({ navigation, route }) => {
           detailed_scores: evaluationResult.detailed_scores,
         });
 
+        // Get current sentence object for progress tracking
+        const currentSentenceObj = getCurrentSentence();
+        
         await saveRecordingToHistory({
           level: selectedLevel,
           sentence: referenceSentence,
@@ -579,7 +751,16 @@ const SualingoScreen = ({ navigation, route }) => {
           referenceAudioUri: referenceAudioUri,
           language: selectedLanguage,
           voice: selectedVoice,
+          courseId: courseContext?.courseId,
+          course: courseContext?.course,
+          topic: courseContext?.topic,
+          practiceSentenceId: currentSentenceObj?.id, // If sentence has id from API
         });
+
+        // Save user progress if in course context
+        if (courseContext && currentSentenceObj?.id) {
+          await saveUserProgress(currentSentenceObj.id, evaluationResult);
+        }
 
         console.log('Evaluation complete. Overall Score:', evaluationResult.score);
       } else {
@@ -696,6 +877,7 @@ const SualingoScreen = ({ navigation, route }) => {
         Promise.resolve().then(async () => {
           try {
             console.log('📤 Saving recording to backend (background)...');
+            
             const backendData = {
               level: recordingData.level,
               sentence: recordingData.sentence,
@@ -708,7 +890,16 @@ const SualingoScreen = ({ navigation, route }) => {
               completeness_score: recordingData.completenessScore,
               word_level_details: recordingData.wordLevelDetails || [],
               language_code: selectedLanguage,
+              course_id: recordingData.courseId || null,
+              practice_sentence_id: recordingData.practiceSentenceId || null,
+              topic: recordingData.topic || null,
             };
+            
+            console.log('📤 [DEBUG] Backend data with course context:', {
+              course_id: backendData.course_id,
+              practice_sentence_id: backendData.practice_sentence_id,
+              topic: backendData.topic
+            });
             
             const response = await recordingsAPI.create(token, backendData);
             console.log('✅ Recording saved to backend:', response.recording.id);
@@ -822,6 +1013,10 @@ const SualingoScreen = ({ navigation, route }) => {
     navigation.navigate('PastRecordingsList');
   };
 
+  const handleCourses = () => {
+    navigation.navigate('Courses');
+  };
+
   const handlePlayUserRecording = async () => {
     if (!userAudioUri) {
       Alert.alert('Error', 'No user recording available');
@@ -850,7 +1045,10 @@ const SualingoScreen = ({ navigation, route }) => {
     }
   };
 
-  const currentSentence = getCurrentSentence();
+  const currentSentenceObj = getCurrentSentence();
+  const currentSentence = typeof currentSentenceObj === 'string' 
+    ? currentSentenceObj 
+    : (currentSentenceObj?.sentence || currentSentenceObj?.text || '');
 
   return (
     <DashboardLayout 
@@ -863,39 +1061,70 @@ const SualingoScreen = ({ navigation, route }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Language Level Selection - Horizontal Scroll */}
-        <View style={styles.levelSection}>
-          <Text style={styles.sectionLabel}>Select Your Level</Text>
-          <ScrollView
-            ref={levelScrollRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.levelButtonsScroll}
-          >
-            {LANGUAGE_LEVELS.map((level) => (
+        {/* Course Context Header */}
+        {courseContext && (
+          <View style={styles.courseContextHeader}>
+            <View style={styles.courseContextBadge}>
               <TouchableOpacity
-                key={level}
-                style={[
-                  styles.levelButton,
-                  selectedLevel === level && styles.levelButtonActive,
-                ]}
-                onPress={() => handleLevelSelect(level)}
+                style={styles.courseContextClickable}
+                onPress={() => {
+                  if (courseContext.courseId && courseContext.course) {
+                    navigation.navigate('CourseDetail', {
+                      courseId: courseContext.courseId,
+                      course: courseContext.course,
+                    });
+                  }
+                }}
                 activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    styles.levelButtonText,
-                    selectedLevel === level && styles.levelButtonTextActive,
-                  ]}
-                >
-                  {level}
+                <Ionicons name="book" size={16} color={COLORS.primary} />
+                <Text style={styles.courseContextText}>
+                  {courseContext.course?.title}
                 </Text>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+              <View style={styles.topicBadgeInline}>
+                <Text style={styles.topicBadgeTextInline}>• {courseContext.topicTitle}</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
-        {/* Voice and Language Selection */}
+        {/* Language Level Selection - Horizontal Scroll (hidden in course context) */}
+        {!courseContext && (
+          <View style={styles.levelSection}>
+            <Text style={styles.sectionLabel}>Select Your Level</Text>
+            <ScrollView
+              ref={levelScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.levelButtonsScroll}
+            >
+              {LANGUAGE_LEVELS.map((level) => (
+                <TouchableOpacity
+                  key={level}
+                  style={[
+                    styles.levelButton,
+                    selectedLevel === level && styles.levelButtonActive,
+                  ]}
+                  onPress={() => handleLevelSelect(level)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.levelButtonText,
+                      selectedLevel === level && styles.levelButtonTextActive,
+                    ]}
+                  >
+                    {level}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Voice and Language Selection (language disabled in course context) */}
         <View style={styles.selectionSection}>
           <View style={styles.selectionRow}>
             <View style={styles.selectionItem}>
@@ -906,14 +1135,26 @@ const SualingoScreen = ({ navigation, route }) => {
               />
             </View>
 
-            <View style={styles.selectionItem}>
-              <Text style={styles.selectionLabel}>Language</Text>
-              <LanguageSelector
-                selectedLanguage={selectedLanguage}
-                onLanguageChange={setSelectedLanguage}
-                showFlag={false}
-              />
-            </View>
+            {!courseContext && (
+              <View style={styles.selectionItem}>
+                <Text style={styles.selectionLabel}>Language</Text>
+                <LanguageSelector
+                  selectedLanguage={selectedLanguage}
+                  onLanguageChange={setSelectedLanguage}
+                  showFlag={false}
+                />
+              </View>
+            )}
+            {courseContext && (
+              <View style={styles.selectionItem}>
+                <Text style={styles.selectionLabel}>Language</Text>
+                <View style={styles.languageDisplay}>
+                  <Text style={styles.languageDisplayText}>
+                    {courseContext.course?.language_code?.toUpperCase() || 'EN'}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
@@ -1248,14 +1489,21 @@ const SualingoScreen = ({ navigation, route }) => {
           )}
         </View>
 
-        {/* Past Recordings Button */}
+        {/* Footer Buttons */}
         <View style={styles.footerSection}>
           <TouchableOpacity 
-            style={styles.pastRecordingsButton}
+            style={styles.footerButton}
+            onPress={handleCourses}
+          >
+            <Ionicons name="book-outline" size={20} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.footerButtonText}>My Courses</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.footerButton}
             onPress={handlePastRecordings}
           >
-            <Ionicons name="time-outline" size={20} color="rgba(255,255,255,0.6)" />
-            <Text style={styles.pastRecordingsText}>Past Recordings</Text>
+            <Ionicons name="time-outline" size={20} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.footerButtonText}>Past Recordings</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1639,22 +1887,79 @@ const styles = StyleSheet.create({
     color: COLORS.gray[400],
   },
   footerSection: {
+    flexDirection: 'row',
+    gap: 12,
     paddingVertical: 20,
-    alignItems: 'center',
+    paddingHorizontal: SIZES.padding,
+    justifyContent: 'center',
   },
-  pastRecordingsButton: {
+  footerButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  pastRecordingsText: {
+  footerButtonText: {
     fontSize: SIZES.body2,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.8)',
+  },
+  // Course Context Styles
+  courseContextHeader: {
+    marginBottom: SIZES.padding,
+    paddingHorizontal: SIZES.padding,
+  },
+  courseContextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(19, 127, 236, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '40',
+    gap: 8,
+  },
+  courseContextClickable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  courseContextText: {
+    fontSize: SIZES.body2,
+    fontWeight: '600',
+    color: COLORS.primary,
+    flex: 1,
+  },
+  topicBadgeInline: {
+    marginLeft: 4,
+  },
+  topicBadgeTextInline: {
+    fontSize: SIZES.body3,
+    fontWeight: '500',
+    color: COLORS.primary,
+    opacity: 0.8,
+  },
+  languageDisplay: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  languageDisplayText: {
+    fontSize: SIZES.body1,
+    fontWeight: '600',
+    color: COLORS.textLight,
   },
   detailedScoresContainer: {
     marginTop: 12,

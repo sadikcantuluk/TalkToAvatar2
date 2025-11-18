@@ -12,7 +12,8 @@ module Api
         recording_params = params.require(:recording).permit(
           :level, :sentence, :user_transcript, :language_code, 
           :user_audio_uri, :reference_audio_uri, :pronunciation_score,
-          :accuracy_score, :fluency_score, :completeness_score
+          :accuracy_score, :fluency_score, :completeness_score,
+          :course_id, :practice_sentence_id, :topic
         )
         
         # Manually handle word_level_details array (Rails strong parameters doesn't handle array of hashes well)
@@ -88,6 +89,20 @@ module Api
         fluency = [[fluency, 0].max, 100].min
         completeness = [[completeness, 0].max, 100].min
         
+        # Validate course_id if provided
+        course_id = recording_params[:course_id]
+        if course_id.present?
+          course = current_user.courses.find_by(id: course_id)
+          unless course
+            render json: { error: 'Course not found or access denied' }, status: :not_found
+            return
+          end
+        end
+
+        # Get practice_sentence_id and topic if provided
+        practice_sentence_id = recording_params[:practice_sentence_id]
+        topic = recording_params[:topic]
+
         recording = current_user.recordings.build(
           level: recording_params[:level],
           transcript: recording_params[:user_transcript] || '',
@@ -98,7 +113,10 @@ module Api
           accuracy: accuracy,
           fluency: fluency,
           completeness: completeness,
-          words: words
+          words: words,
+          course_id: course_id,
+          practice_sentence_id: practice_sentence_id,
+          topic: topic
         )
 
         if recording.save
@@ -115,6 +133,7 @@ module Api
               fluency: recording.fluency,
               completeness: recording.completeness,
               words: recording.words,
+              course_id: recording.course_id,
               created_at: recording.created_at
             }
           }, status: :created

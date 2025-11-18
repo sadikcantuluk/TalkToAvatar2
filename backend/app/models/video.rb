@@ -1,5 +1,6 @@
 class Video < ApplicationRecord
   belongs_to :user
+  belongs_to :course, optional: true
 
   # Validations
   validates :text, presence: true

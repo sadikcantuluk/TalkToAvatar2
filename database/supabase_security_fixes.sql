@@ -230,6 +230,185 @@ WHERE n.nspname = 'public'
 ORDER BY p.proname;
 
 -- =====================================================
+-- SUALINGO MODE: Courses, Subjects, Reports, Analyses RLS
+-- =====================================================
+
+-- Courses tablosu için RLS
+ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own courses" 
+  ON public.courses FOR SELECT 
+  USING (auth.uid()::text = user_id::text);
+
+CREATE POLICY "Users can create own courses" 
+  ON public.courses FOR INSERT 
+  WITH CHECK (auth.uid()::text = user_id::text);
+
+CREATE POLICY "Users can update own courses" 
+  ON public.courses FOR UPDATE 
+  USING (auth.uid()::text = user_id::text);
+
+CREATE POLICY "Users can delete own courses" 
+  ON public.courses FOR DELETE 
+  USING (auth.uid()::text = user_id::text);
+
+-- Subjects tablosu için RLS (course üzerinden kontrol)
+ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view subjects of own courses" 
+  ON public.subjects FOR SELECT 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = subjects.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can create subjects in own courses" 
+  ON public.subjects FOR INSERT 
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = subjects.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can update subjects in own courses" 
+  ON public.subjects FOR UPDATE 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = subjects.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can delete subjects in own courses" 
+  ON public.subjects FOR DELETE 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = subjects.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+-- Reports tablosu için RLS (course üzerinden kontrol)
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view reports of own courses" 
+  ON public.reports FOR SELECT 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = reports.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can create reports in own courses" 
+  ON public.reports FOR INSERT 
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = reports.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can update reports in own courses" 
+  ON public.reports FOR UPDATE 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = reports.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can delete reports in own courses" 
+  ON public.reports FOR DELETE 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = reports.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+-- Analyses tablosu için RLS (course üzerinden kontrol)
+ALTER TABLE public.analyses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view analyses of own courses" 
+  ON public.analyses FOR SELECT 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = analyses.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can create analyses in own courses" 
+  ON public.analyses FOR INSERT 
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = analyses.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can update analyses in own courses" 
+  ON public.analyses FOR UPDATE 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = analyses.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE POLICY "Users can delete analyses in own courses" 
+  ON public.analyses FOR DELETE 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = analyses.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    )
+  );
+
+-- Videos tablosu için course_id kontrolü (opsiyonel course_id için)
+-- Mevcut politikaları güncelle - course_id varsa course sahibi kontrolü
+DROP POLICY IF EXISTS "Users can view own videos" ON public.videos;
+CREATE POLICY "Users can view own videos" 
+  ON public.videos FOR SELECT 
+  USING (
+    auth.uid()::text = user_id::text OR
+    (course_id IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = videos.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    ))
+  );
+
+-- Recordings tablosu için course_id kontrolü (opsiyonel course_id için)
+DROP POLICY IF EXISTS "Users can view own recordings" ON public.recordings;
+CREATE POLICY "Users can view own recordings" 
+  ON public.recordings FOR SELECT 
+  USING (
+    auth.uid()::text = user_id::text OR
+    (course_id IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.courses 
+      WHERE courses.id = recordings.course_id 
+      AND courses.user_id::text = auth.uid()::text
+    ))
+  );
+
+-- =====================================================
 -- NOTLAR
 -- =====================================================
 -- 
@@ -238,6 +417,8 @@ ORDER BY p.proname;
 -- 3. auth.uid() Supabase authentication kullanır
 -- 4. Sentence banks herkese açıktır (authenticated users)
 -- 5. Schema migrations ve internal metadata'ya sadece service role erişebilir
+-- 6. Courses, Subjects, Reports, Analyses için RLS politikaları eklendi
+-- 7. Videos ve Recordings için course_id kontrolü eklendi
 -- 
 -- ÖNEMLÎ: Eğer backend'iniz Supabase Auth yerine kendi JWT token 
 -- sisteminizi kullanıyorsa, politikaları buna göre düzenlemeniz gerekir.

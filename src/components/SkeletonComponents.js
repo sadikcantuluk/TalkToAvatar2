@@ -79,6 +79,31 @@ export const RecordingCardSkeleton = () => {
 };
 
 /**
+ * Skeleton component for Course Card
+ */
+export const CourseCardSkeleton = () => {
+  return (
+    <View style={styles.courseCard}>
+      <View style={styles.courseHeader}>
+        <View style={styles.courseInfo}>
+          <Skeleton width="70%" height={20} borderRadius={4} style={styles.titleSkeleton} />
+          <Skeleton width="50%" height={14} borderRadius={4} style={styles.dateSkeleton} />
+        </View>
+        <Skeleton width={32} height={32} borderRadius={16} />
+      </View>
+      <View style={styles.courseContent}>
+        <Skeleton width="90%" height={16} borderRadius={4} style={styles.descriptionSkeleton} />
+        <Skeleton width="75%" height={16} borderRadius={4} style={styles.descriptionSkeleton} />
+      </View>
+      <View style={styles.courseMeta}>
+        <Skeleton width={40} height={24} borderRadius={12} />
+        <Skeleton width={50} height={24} borderRadius={12} />
+      </View>
+    </View>
+  );
+};
+
+/**
  * Skeleton component for Avatar Grid Item
  */
 export const AvatarGridItemSkeleton = () => {
@@ -86,6 +111,122 @@ export const AvatarGridItemSkeleton = () => {
     <View style={styles.avatarGridItem}>
       <Skeleton width="100%" height={120} borderRadius={12} style={styles.avatarImageSkeleton} />
       <Skeleton width="70%" height={16} borderRadius={4} style={styles.avatarNameSkeleton} />
+    </View>
+  );
+};
+
+/**
+ * Skeleton component for Course Detail Overview
+ */
+export const OverviewSkeleton = () => {
+  return (
+    <View style={styles.overviewSkeleton}>
+      <View style={styles.progressCardSkeleton}>
+        <Skeleton width="40%" height={18} borderRadius={4} style={styles.sectionTitleSkeleton} />
+        <View style={styles.progressBarContainer}>
+          <Skeleton width="70%" height={12} borderRadius={6} />
+          <Skeleton width="15%" height={20} borderRadius={4} />
+        </View>
+        <Skeleton width="30%" height={18} borderRadius={4} style={styles.sectionTitleSkeleton} />
+        <View style={styles.statsGridSkeleton}>
+          <Skeleton width="100%" height={80} borderRadius={12} />
+          <Skeleton width="100%" height={80} borderRadius={12} />
+          <Skeleton width="100%" height={80} borderRadius={12} />
+        </View>
+      </View>
+    </View>
+  );
+};
+
+/**
+ * Skeleton component for Subjects List
+ */
+export const SubjectsSkeleton = () => {
+  return (
+    <View style={styles.subjectsSkeleton}>
+      {[1, 2, 3].map((index) => (
+        <View key={index} style={styles.subjectCardSkeleton}>
+          <View style={styles.subjectHeaderSkeleton}>
+            <Skeleton width={24} height={24} variant="circle" />
+            <View style={styles.subjectInfoSkeleton}>
+              <Skeleton width="60%" height={18} borderRadius={4} />
+              <Skeleton width="50%" height={14} borderRadius={4} style={styles.subjectMetaSkeleton} />
+            </View>
+            <Skeleton width={80} height={36} borderRadius={18} />
+          </View>
+          <View style={styles.subjectProgressSkeleton}>
+            <Skeleton width="75%" height={8} borderRadius={4} />
+            <Skeleton width="15%" height={14} borderRadius={4} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+/**
+ * Skeleton component for Recordings List
+ */
+export const RecordingsSkeleton = () => {
+  return (
+    <View style={styles.recordingsSkeleton}>
+      {[1, 2, 3].map((index) => (
+        <View key={index} style={styles.recordingItemSkeleton}>
+          <View style={styles.recordingHeaderSkeleton}>
+            <Skeleton width={20} height={20} borderRadius={10} />
+            <Skeleton width="70%" height={16} borderRadius={4} />
+          </View>
+          <Skeleton width="25%" height={24} borderRadius={12} style={styles.scoreBadgeSkeleton} />
+          <Skeleton width="90%" height={14} borderRadius={4} style={styles.transcriptSkeleton} />
+          <Skeleton width="80%" height={14} borderRadius={4} style={styles.transcriptSkeleton} />
+          <Skeleton width="40%" height={12} borderRadius={4} style={styles.dateSkeleton} />
+        </View>
+      ))}
+    </View>
+  );
+};
+
+/**
+ * Skeleton component for Reports List
+ */
+export const ReportsSkeleton = () => {
+  return (
+    <View style={styles.reportsSkeleton}>
+      {[1, 2, 3].map((index) => (
+        <View key={index} style={styles.reportItemSkeleton}>
+          <Skeleton width="60%" height={18} borderRadius={4} style={styles.reportTitleSkeleton} />
+          <Skeleton width="90%" height={14} borderRadius={4} style={styles.reportContentSkeleton} />
+          <Skeleton width="80%" height={14} borderRadius={4} style={styles.reportContentSkeleton} />
+          <Skeleton width="70%" height={14} borderRadius={4} style={styles.reportContentSkeleton} />
+          <Skeleton width="30%" height={12} borderRadius={4} style={styles.reportMetaSkeleton} />
+        </View>
+      ))}
+    </View>
+  );
+};
+
+/**
+ * Skeleton component for Analysis
+ */
+export const AnalysisSkeleton = () => {
+  return (
+    <View style={styles.analysisSkeleton}>
+      <View style={styles.analysisCardSkeleton}>
+        <Skeleton width="40%" height={18} borderRadius={4} style={styles.sectionTitleSkeleton} />
+        <Skeleton width="100%" height={200} borderRadius={12} style={styles.chartSkeleton} />
+      </View>
+      <View style={styles.analysisCardSkeleton}>
+        <Skeleton width="40%" height={18} borderRadius={4} style={styles.sectionTitleSkeleton} />
+        <Skeleton width="100%" height={150} borderRadius={12} style={styles.chartSkeleton} />
+      </View>
+      <View style={styles.analysisCardSkeleton}>
+        <Skeleton width="40%" height={18} borderRadius={4} style={styles.sectionTitleSkeleton} />
+        <View style={styles.statsGridSkeleton}>
+          <Skeleton width="100%" height={60} borderRadius={12} />
+          <Skeleton width="100%" height={60} borderRadius={12} />
+          <Skeleton width="100%" height={60} borderRadius={12} />
+        </View>
+      </View>
     </View>
   );
 };
@@ -204,6 +345,36 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+  // Course Card Skeleton
+  courseCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: SIZES.padding,
+    marginBottom: SIZES.base,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  courseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SIZES.base,
+  },
+  courseInfo: {
+    flex: 1,
+  },
+  courseContent: {
+    marginBottom: SIZES.base,
+    gap: 6,
+  },
+  descriptionSkeleton: {
+    marginTop: 4,
+  },
+  courseMeta: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+
   // Avatar Grid Item Skeleton
   avatarGridItem: {
     marginBottom: 16,
@@ -219,5 +390,124 @@ const styles = StyleSheet.create({
   skeletonList: {
     padding: SIZES.padding,
   },
-});
 
+  // Overview Skeleton
+  overviewSkeleton: {
+    padding: SIZES.padding,
+  },
+  progressCardSkeleton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: SIZES.padding,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  sectionTitleSkeleton: {
+    marginBottom: SIZES.base,
+  },
+  progressBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: SIZES.padding,
+  },
+  statsGridSkeleton: {
+    flexDirection: 'row',
+    gap: SIZES.base,
+    marginTop: SIZES.base,
+  },
+
+  // Subjects Skeleton
+  subjectsSkeleton: {
+    padding: SIZES.padding,
+  },
+  subjectCardSkeleton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: SIZES.padding,
+    marginBottom: SIZES.base,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  subjectHeaderSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: SIZES.base,
+  },
+  subjectInfoSkeleton: {
+    flex: 1,
+  },
+  subjectMetaSkeleton: {
+    marginTop: 4,
+  },
+  subjectProgressSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  // Recordings Skeleton
+  recordingsSkeleton: {
+    padding: SIZES.padding,
+  },
+  recordingItemSkeleton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    marginBottom: SIZES.base,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  recordingHeaderSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  scoreBadgeSkeleton: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  transcriptSkeleton: {
+    marginTop: 4,
+  },
+
+  // Reports Skeleton
+  reportsSkeleton: {
+    padding: SIZES.padding,
+  },
+  reportItemSkeleton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    marginBottom: SIZES.base,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  reportTitleSkeleton: {
+    marginBottom: 8,
+  },
+  reportContentSkeleton: {
+    marginTop: 4,
+  },
+  reportMetaSkeleton: {
+    marginTop: 8,
+  },
+
+  // Analysis Skeleton
+  analysisSkeleton: {
+    padding: SIZES.padding,
+  },
+  analysisCardSkeleton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: SIZES.padding,
+    marginBottom: SIZES.padding,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  chartSkeleton: {
+    marginTop: SIZES.base,
+  },
+});

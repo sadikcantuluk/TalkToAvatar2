@@ -21,6 +21,9 @@ import {
   SualingoScreen,
   PastRecordingsListScreen,
 } from '../screens';
+import CoursesScreen from '../screens/CoursesScreen';
+import CourseDetailScreen from '../screens/CourseDetailScreen';
+import CoursePracticeScreen from '../screens/CoursePracticeScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -59,6 +62,9 @@ const AppNavigator = () => {
         <Stack.Screen name="PastAudioList" component={PastAudioListScreen} />
         <Stack.Screen name="PastVideosList" component={PastVideosListScreen} />
         <Stack.Screen name="PastRecordingsList" component={PastRecordingsListScreen} />
+        <Stack.Screen name="Courses" component={CoursesScreen} />
+        <Stack.Screen name="CourseDetail" component={CourseDetailScreen} />
+        <Stack.Screen name="CoursePractice" component={CoursePracticeScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
