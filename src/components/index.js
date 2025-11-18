@@ -25,4 +25,5 @@ export {
 } from './SkeletonComponents';
 export { default as PronunciationResult } from './PronunciationResult';
 export { default as CourseProgressCard } from './CourseProgressCard';
+export { default as ProgressBar, getProgressColor } from './ProgressBar';
 

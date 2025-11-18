@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../constants';
+import ProgressBar from './ProgressBar';
 
 const CourseProgressCard = ({ progress }) => {
   if (!progress) return null;
@@ -33,17 +34,14 @@ const CourseProgressCard = ({ progress }) => {
       {/* Overall Progress */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Overall Progress</Text>
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progress.overallProgress}%` },
-              ]}
-            />
-          </View>
-          <Text style={styles.progressText}>{progress.overallProgress}%</Text>
-        </View>
+        <ProgressBar
+          progress={progress.overallProgress}
+          height={12}
+          borderRadius={6}
+          showPercentage={true}
+          containerStyle={styles.progressContainer}
+          textStyle={styles.progressText}
+        />
       </View>
 
       {/* Weekly Stats */}
@@ -121,18 +119,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  progressBar: {
-    flex: 1,
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 6,
   },
   progressText: {
     fontSize: SIZES.h3,

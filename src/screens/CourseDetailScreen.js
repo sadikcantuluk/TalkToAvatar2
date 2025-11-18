@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DashboardLayout, CourseProgressCard } from '../components';
+import ProgressBar from '../components/ProgressBar';
 import { 
   OverviewSkeleton, 
   SubjectsSkeleton, 
@@ -21,14 +22,20 @@ import {
   ReportsSkeleton, 
   AnalysisSkeleton 
 } from '../components/SkeletonComponents';
-import { useCourseProgress } from '../hooks/useCourseProgress';
 import { COLORS, SIZES } from '../constants';
 import { useAuth } from '../context';
-import coursesAPI from '../services/coursesAPI';
-import subjectsAPI from '../services/subjectsAPI';
-import reportsAPI from '../services/reportsAPI';
-import analysesAPI from '../services/analysesAPI';
 import { playAudio, stopAudio } from '../services/openAI';
+import {
+  useCourse,
+  useCourseSubjects,
+  useCourseRecordings,
+  useCourseReports,
+  useCourseAnalyses,
+  useCourseProgress,
+  useDeleteCourse,
+} from '../hooks/useCourseQueries';
+import { useCourseStatistics } from '../hooks/useCourseStatistics';
+import { calculateStreakFromGrouped } from '../utils/streakCalculator';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -37,25 +44,42 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const CourseDetailScreen = ({ route, navigation }) => {
   const { courseId, course: initialCourse } = route.params || {};
-  const { token } = useAuth();
-  
-  const [course, setCourse] = useState(initialCourse);
-  const [loading, setLoading] = useState(!initialCourse);
-  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   
-  // Tab data
-  const [subjects, setSubjects] = useState([]);
-  const [recordings, setRecordings] = useState([]); // Now grouped: [{topic, topic_title, sentences: [{sentence_id, sentence, recordings: [...]}]}]
-  const [reports, setReports] = useState([]);
-  const [analyses, setAnalyses] = useState(null); // Object, not array: {overall: {...}, topics: [...], time_series: [...], error_analysis: [...]}
   
-  // Separate loading states for each tab
-  const [loadingOverview, setLoadingOverview] = useState(true);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
-  const [loadingRecordings, setLoadingRecordings] = useState(false);
-  const [loadingReports, setLoadingReports] = useState(false);
-  const [loadingAnalyses, setLoadingAnalyses] = useState(false);
+  // React Query hooks - data is automatically cached
+  const courseQuery = useCourse(courseId);
+  const subjectsQuery = useCourseSubjects(courseId);
+  const recordingsQuery = useCourseRecordings(courseId);
+  const reportsQuery = useCourseReports(courseId);
+  const analysesQuery = useCourseAnalyses(courseId);
+  const progressQuery = useCourseProgress(courseId);
+  const deleteCourseMutation = useDeleteCourse(() => {
+    // Navigate back immediately after optimistic update
+    navigation.goBack();
+  });
+  
+  // Computed statistics from cache (no API calls)
+  const { statistics } = useCourseStatistics(courseId);
+  
+  // Use initial course if available, otherwise use query data
+  const course = initialCourse || courseQuery.data;
+  const loading = courseQuery.isLoading && !initialCourse;
+  const error = courseQuery.error;
+  
+  // Extract data from queries
+  const subjects = subjectsQuery.data || [];
+  const recordings = recordingsQuery.data || [];
+  const reports = reportsQuery.data || [];
+  const analyses = analysesQuery.data || null;
+  const progress = progressQuery.data;
+  
+  // Loading states for each tab (from cache, should be instant)
+  const loadingOverview = progressQuery.isLoading;
+  const loadingSubjects = subjectsQuery.isLoading && activeTab === 'subjects';
+  const loadingRecordings = recordingsQuery.isLoading && activeTab === 'recordings';
+  const loadingReports = reportsQuery.isLoading && activeTab === 'reports';
+  const loadingAnalyses = analysesQuery.isLoading && activeTab === 'analyses';
   
   // Accordion state for recordings
   const [expandedTopics, setExpandedTopics] = useState({});
@@ -67,117 +91,6 @@ const CourseDetailScreen = ({ route, navigation }) => {
   const [expandedReportSentences, setExpandedReportSentences] = useState({});
   const [expandedReportDetails, setExpandedReportDetails] = useState({});
 
-  // Progress tracking
-  const { progress, loading: progressLoading } = useCourseProgress(courseId);
-
-  useEffect(() => {
-    if (courseId && !initialCourse) {
-      fetchCourse();
-    }
-    if (courseId) {
-      // Fetch all tab data on mount
-      fetchAllTabData();
-      // Also fetch when tab changes
-      fetchTabData();
-    }
-  }, [courseId, activeTab]);
-
-  const fetchCourse = async () => {
-    try {
-      setLoading(true);
-      const data = await coursesAPI.getById(token, courseId);
-      setCourse(data);
-    } catch (err) {
-      console.error('Error fetching course:', err);
-      setError(err.message || 'Failed to load course');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch all tab data on mount for stats
-  const fetchAllTabData = async () => {
-    if (!courseId || !token) return;
-    
-    try {
-      // Fetch all data in parallel for stats
-      const [subjectsData, recordingsData, reportsData, analysesData] = await Promise.all([
-        coursesAPI.getSubjects(token, courseId).catch(() => []),
-        coursesAPI.getRecordings(token, courseId).catch(() => []),
-        coursesAPI.getReports(token, courseId).catch(() => []),
-        coursesAPI.getAnalyses(token, courseId).catch(() => null),
-      ]);
-
-      // Update states
-      setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
-      setRecordings(Array.isArray(recordingsData) ? recordingsData : []);
-      setReports(Array.isArray(reportsData) ? reportsData : []);
-      setAnalyses(analysesData || null);
-    } catch (err) {
-      console.error('Error fetching all tab data:', err);
-    }
-  };
-
-  const fetchTabData = async () => {
-    if (!courseId) return;
-    
-    try {
-      switch (activeTab) {
-        case 'overview':
-          setLoadingOverview(true);
-          // Overview data is fetched via useCourseProgress hook
-          // Just set loading to false after a brief delay for smooth UX
-          setTimeout(() => setLoadingOverview(false), 300);
-          break;
-        case 'subjects':
-          setLoadingSubjects(true);
-          const subjectsData = await coursesAPI.getSubjects(token, courseId);
-          setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
-          setLoadingSubjects(false);
-          break;
-        case 'recordings':
-          setLoadingRecordings(true);
-          const recordingsData = await coursesAPI.getRecordings(token, courseId).catch(() => []);
-          setRecordings(Array.isArray(recordingsData) ? recordingsData : []);
-          setLoadingRecordings(false);
-          break;
-        case 'reports':
-          setLoadingReports(true);
-          const reportsData = await coursesAPI.getReports(token, courseId);
-          setReports(Array.isArray(reportsData) ? reportsData : []);
-          setLoadingReports(false);
-          break;
-        case 'analyses':
-          setLoadingAnalyses(true);
-          const analysesData = await coursesAPI.getAnalyses(token, courseId);
-          // Analyses is an object, not an array
-          setAnalyses(analysesData || null);
-          setLoadingAnalyses(false);
-          break;
-      }
-    } catch (err) {
-      console.error(`Error fetching ${activeTab}:`, err);
-      // Set loading to false on error
-      switch (activeTab) {
-        case 'overview':
-          setLoadingOverview(false);
-          break;
-        case 'subjects':
-          setLoadingSubjects(false);
-          break;
-        case 'recordings':
-          setLoadingRecordings(false);
-          break;
-        case 'reports':
-          setLoadingReports(false);
-          break;
-        case 'analyses':
-          setLoadingAnalyses(false);
-          break;
-      }
-    }
-  };
-
   const handleDeleteCourse = () => {
     Alert.alert(
       'Delete Course',
@@ -187,14 +100,17 @@ const CourseDetailScreen = ({ route, navigation }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await coursesAPI.delete(token, courseId);
-              Alert.alert('Success', 'Course deleted successfully');
-              navigation.goBack();
-            } catch (err) {
-              Alert.alert('Error', err.message || 'Failed to delete course');
-            }
+          onPress: () => {
+            // Start mutation - optimistic update happens in onMutate
+            // Navigation happens automatically via callback in onMutate
+            // Backend deletion continues in background
+            deleteCourseMutation.mutate(courseId, {
+              onError: (err) => {
+                // Only show error if deletion actually failed
+                console.error('❌ [CourseDetailScreen] Failed to delete course:', err);
+                // Error is already handled by mutation's onError (rollback)
+              },
+            });
           },
         },
       ]
@@ -207,68 +123,105 @@ const CourseDetailScreen = ({ route, navigation }) => {
   };
 
   // Course Info Card Component
-  const renderCourseInfoCard = () => (
+  const renderCourseInfoCard = () => {
+    const formatDate = (dateString) => {
+      if (!dateString) return null;
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    };
+
+    return (
     <View style={styles.courseInfoCard}>
-      <View style={styles.courseInfoHeader}>
-        <Text style={styles.courseInfoTitle}>{course?.title}</Text>
+        <View style={styles.courseInfoContent}>
+          {/* Left Section - Title and Description */}
+          <View style={styles.courseInfoLeft}>
+            <View style={styles.courseInfoTitleRow}>
+              <Ionicons name="book" size={24} color={COLORS.primary} style={styles.courseInfoIcon} />
+              <Text style={styles.courseInfoTitle} numberOfLines={2}>{course?.title}</Text>
+            </View>
+            {course?.description && (
+              <Text style={styles.courseInfoDescription} numberOfLines={3}>
+                {course.description}
+              </Text>
+            )}
+            {course?.created_at && (
+              <View style={styles.courseInfoMeta}>
+                <Ionicons name="calendar-outline" size={14} color={COLORS.gray[400]} />
+                <Text style={styles.courseInfoMetaText}>
+                  Created {formatDate(course.created_at)}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Right Section - Badges */}
+          <View style={styles.courseInfoRight}>
         <View style={styles.courseInfoBadges}>
           <View style={[styles.infoBadge, styles.levelBadge]}>
+                <Ionicons name="school-outline" size={14} color={COLORS.primary} />
             <Text style={styles.infoBadgeText}>{course?.level || 'N/A'}</Text>
           </View>
           <View style={[styles.infoBadge, styles.languageBadge]}>
+                <Ionicons name="globe-outline" size={14} color="#10b981" />
             <Text style={styles.infoBadgeText}>
               {course?.language_code?.toUpperCase() || 'N/A'}
             </Text>
           </View>
           <View style={[styles.infoBadge, styles.statusBadge]}>
+                <Ionicons 
+                  name={course?.status === 'active' ? 'checkmark-circle-outline' : 'time-outline'} 
+                  size={14} 
+                  color="#f59e0b" 
+                />
             <Text style={styles.infoBadgeText}>{course?.status || 'active'}</Text>
           </View>
         </View>
       </View>
-      {course?.description && (
-        <Text style={styles.courseInfoDescription}>{course.description}</Text>
-      )}
+        </View>
     </View>
   );
+  };
 
-  // Stats Row Component
+  // Stats Row Component - Now uses computed statistics from cache
   const renderStatsRow = () => {
-    // Calculate total recordings count from grouped structure
-    const totalRecordings = Array.isArray(recordings) && recordings.length > 0
-      ? recordings.reduce((total, topic) => {
-          const topicRecordings = topic.sentences?.reduce((sum, sentence) => {
-            return sum + (sentence.recordings?.length || 0);
-          }, 0) || 0;
-          return total + topicRecordings;
-        }, 0)
-      : 0;
+    // Use computed statistics (no API calls, calculated from cache)
+    const stats = statistics || {
+      subjectsCount: 0,
+      recordingsCount: 0,
+      reportsCount: 0,
+      analysesCount: 0,
+    };
 
     return (
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Ionicons name="book-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.statValue}>{subjects.length}</Text>
+          <Text style={styles.statValue}>{stats.subjectsCount}</Text>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             Subjects
           </Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="mic-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.statValue}>{totalRecordings}</Text>
+          <Text style={styles.statValue}>{stats.recordingsCount}</Text>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             Records
           </Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="document-text-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.statValue}>{reports.length}</Text>
+          <Text style={styles.statValue}>{stats.reportsCount}</Text>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             Reports
           </Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="analytics-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.statValue}>{analyses?.overall ? 1 : 0}</Text>
+          <Text style={styles.statValue}>{stats.analysesCount}</Text>
           <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             Analysis
           </Text>
@@ -278,13 +231,36 @@ const CourseDetailScreen = ({ route, navigation }) => {
   };
 
   const renderOverview = () => {
-    if (loadingOverview || progressLoading) {
+    if (loadingOverview || progressQuery.isLoading) {
       return (
         <View style={styles.tabContent}>
           <OverviewSkeleton />
         </View>
       );
     }
+
+    // Transform progress data to match CourseProgressCard format
+    const progressData = progress ? {
+      overallProgress: progress.overall_progress || 0,
+      subjectProgress: (progress.topic_progress || []).map(tp => ({
+        id: tp.topic,
+        title: tp.title,
+        progress: tp.progress || 0,
+        completed: tp.completed_status || false,
+      })),
+      weeklyStats: {
+        practices: progress.weekly_stats?.practices || 0,
+        avgScore: progress.weekly_stats?.avg_score || 0,
+        // Calculate streak from recordings if not provided by backend
+        streak: progress.weekly_stats?.streak ?? (recordings.length > 0 ? calculateStreakFromGrouped(recordings) : 0),
+      },
+      recentActivities: [],
+      totalSubjects: progress.topic_progress?.length || 0,
+      completedSubjects: (progress.topic_progress || []).filter(tp => tp.completed_status).length,
+      totalRecordings: progress.completed_sentences || 0,
+      totalReports: 0,
+      totalAnalyses: 0,
+    } : null;
 
     return (
       <ScrollView
@@ -293,7 +269,7 @@ const CourseDetailScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Progress Card */}
-        {progress && <CourseProgressCard progress={progress} />}
+        {progressData && <CourseProgressCard progress={progressData} />}
       </ScrollView>
     );
   };
@@ -361,6 +337,19 @@ const CourseDetailScreen = ({ route, navigation }) => {
                     </Text>
                   </View>
                 </View>
+              </View>
+
+              <View style={styles.topicProgressContainer}>
+                <ProgressBar
+                  progress={progressPercentage}
+                  height={8}
+                  showPercentage={true}
+                  containerStyle={styles.topicProgressContainer}
+                  textStyle={styles.topicProgressText}
+                />
+              </View>
+
+              <View style={styles.topicActionContainer}>
                 <TouchableOpacity
                   style={styles.startPracticeButton}
                   onPress={(e) => {
@@ -379,18 +368,6 @@ const CourseDetailScreen = ({ route, navigation }) => {
                   <Text style={styles.startPracticeButtonText}>Start</Text>
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.topicProgressContainer}>
-                <View style={styles.topicProgressBar}>
-                  <View
-                    style={[
-                      styles.topicProgressFill,
-                      { width: `${progressPercentage}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.topicProgressText}>{progressPercentage}%</Text>
-              </View>
             </TouchableOpacity>
           );
         }}
@@ -402,18 +379,44 @@ const CourseDetailScreen = ({ route, navigation }) => {
 
   const toggleTopic = (topic) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedTopics(prev => ({
-      ...prev,
-      [topic]: !prev[topic]
-    }));
+    setExpandedTopics(prev => {
+      const isCurrentlyExpanded = prev[topic];
+      // If opening, close all others and open this one
+      // If closing, just close this one
+      if (isCurrentlyExpanded) {
+        return { ...prev, [topic]: false };
+      } else {
+        // Close all topics, then open this one
+        const newState = {};
+        Object.keys(prev).forEach(key => {
+          newState[key] = false;
+        });
+        newState[topic] = true;
+        return newState;
+      }
+    });
+    // Also close all sentences when topic changes
+    setExpandedSentences({});
   };
 
   const toggleSentence = (sentenceId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedSentences(prev => ({
-      ...prev,
-      [sentenceId]: !prev[sentenceId]
-    }));
+    setExpandedSentences(prev => {
+      const isCurrentlyExpanded = prev[sentenceId];
+      // If opening, close all others and open this one
+      // If closing, just close this one
+      if (isCurrentlyExpanded) {
+        return { ...prev, [sentenceId]: false };
+      } else {
+        // Close all sentences, then open this one
+        const newState = {};
+        Object.keys(prev).forEach(key => {
+          newState[key] = false;
+        });
+        newState[sentenceId] = true;
+        return newState;
+      }
+    });
   };
 
   const handlePlayRecording = async (audioUri, recordingId) => {
@@ -578,26 +581,67 @@ const CourseDetailScreen = ({ route, navigation }) => {
 
   const toggleReportTopic = (topic) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedReportTopics(prev => ({
-      ...prev,
-      [topic]: !prev[topic]
-    }));
+    setExpandedReportTopics(prev => {
+      const isCurrentlyExpanded = prev[topic];
+      // If opening, close all others and open this one
+      // If closing, just close this one
+      if (isCurrentlyExpanded) {
+        return { ...prev, [topic]: false };
+      } else {
+        // Close all report topics, then open this one
+        const newState = {};
+        Object.keys(prev).forEach(key => {
+          newState[key] = false;
+        });
+        newState[topic] = true;
+        return newState;
+      }
+    });
+    // Also close all report sentences and details when topic changes
+    setExpandedReportSentences({});
+    setExpandedReportDetails({});
   };
 
   const toggleReportSentence = (sentenceId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedReportSentences(prev => ({
-      ...prev,
-      [sentenceId]: !prev[sentenceId]
-    }));
+    setExpandedReportSentences(prev => {
+      const isCurrentlyExpanded = prev[sentenceId];
+      // If opening, close all others and open this one
+      // If closing, just close this one
+      if (isCurrentlyExpanded) {
+        return { ...prev, [sentenceId]: false };
+      } else {
+        // Close all report sentences, then open this one
+        const newState = {};
+        Object.keys(prev).forEach(key => {
+          newState[key] = false;
+        });
+        newState[sentenceId] = true;
+        return newState;
+      }
+    });
+    // Also close all report details when sentence changes
+    setExpandedReportDetails({});
   };
 
   const toggleReportDetails = (reportId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedReportDetails(prev => ({
-      ...prev,
-      [reportId]: !prev[reportId]
-    }));
+    setExpandedReportDetails(prev => {
+      const isCurrentlyExpanded = prev[reportId];
+      // If opening, close all others and open this one
+      // If closing, just close this one
+      if (isCurrentlyExpanded) {
+        return { ...prev, [reportId]: false };
+      } else {
+        // Close all report details, then open this one
+        const newState = {};
+        Object.keys(prev).forEach(key => {
+          newState[key] = false;
+        });
+        newState[reportId] = true;
+        return newState;
+      }
+    });
   };
 
   const renderReports = () => {
@@ -834,21 +878,21 @@ const CourseDetailScreen = ({ route, navigation }) => {
         <View style={styles.analysisCard}>
           <Text style={styles.analysisCardTitle}>Overall Performance</Text>
           <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{typeof overall.avg_score === 'string' ? parseFloat(overall.avg_score).toFixed(1) : (overall.avg_score?.toFixed(1) || 0)}%</Text>
-              <Text style={styles.statLabel}>Avg Score</Text>
+            <View style={styles.analysisStatCard}>
+              <Text style={styles.analysisStatValue}>{typeof overall.avg_score === 'string' ? parseFloat(overall.avg_score).toFixed(1) : (overall.avg_score?.toFixed(1) || 0)}%</Text>
+              <Text style={styles.analysisStatLabel}>Avg Score</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{typeof overall.success_rate === 'string' ? parseFloat(overall.success_rate).toFixed(1) : (overall.success_rate?.toFixed(1) || 0)}%</Text>
-              <Text style={styles.statLabel}>Success Rate</Text>
+            <View style={styles.analysisStatCard}>
+              <Text style={styles.analysisStatValue}>{typeof overall.success_rate === 'string' ? parseFloat(overall.success_rate).toFixed(1) : (overall.success_rate?.toFixed(1) || 0)}%</Text>
+              <Text style={styles.analysisStatLabel}>Success Rate</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{typeof overall.completion_rate === 'string' ? parseFloat(overall.completion_rate).toFixed(1) : (overall.completion_rate?.toFixed(1) || 0)}%</Text>
-              <Text style={styles.statLabel}>Completion</Text>
+            <View style={styles.analysisStatCard}>
+              <Text style={styles.analysisStatValue}>{typeof overall.completion_rate === 'string' ? parseFloat(overall.completion_rate).toFixed(1) : (overall.completion_rate?.toFixed(1) || 0)}%</Text>
+              <Text style={styles.analysisStatLabel}>Completion</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{overall.total_recordings || 0}</Text>
-              <Text style={styles.statLabel}>Recordings</Text>
+            <View style={styles.analysisStatCard}>
+              <Text style={styles.analysisStatValue}>{overall.total_recordings || 0}</Text>
+              <Text style={styles.analysisStatLabel}>Recordings</Text>
             </View>
           </View>
           <View style={styles.scoreRangeRow}>
@@ -871,25 +915,40 @@ const CourseDetailScreen = ({ route, navigation }) => {
         {topics && topics.length > 0 && (
           <View style={styles.analysisCard}>
             <Text style={styles.analysisCardTitle}>Topic Performance</Text>
-            {topics.map((topic, index) => (
+            {topics.map((topic, index) => {
+              // Calculate completion percentage based on completed/total sentences
+              const completedSentences = topic.completed_sentences || 0;
+              const totalSentences = topic.total_sentences || 0;
+              const completionPercentage = totalSentences > 0 
+                ? (completedSentences / totalSentences) * 100 
+                : 0;
+
+              return (
               <View key={index} style={styles.topicStatItem}>
                 <View style={styles.topicStatHeader}>
                   <Text style={styles.topicStatTitle}>{topic.topic_title}</Text>
-                  <Text style={styles.topicStatScore}>{typeof topic.avg_score === 'string' ? parseFloat(topic.avg_score).toFixed(1) : (topic.avg_score?.toFixed(1) || 0)}%</Text>
+                    <Text style={styles.topicStatScore}>{Math.round(completionPercentage)}%</Text>
                 </View>
-                <View style={styles.topicStatProgress}>
-                  <View style={[styles.topicStatProgressBar, { width: `${topic.success_rate || 0}%` }]} />
+                  <View style={styles.topicStatProgressContainer}>
+                    <ProgressBar
+                      progress={completionPercentage}
+                      height={6}
+                      borderRadius={3}
+                      showPercentage={false}
+                      containerStyle={{ gap: 0 }}
+                    />
                 </View>
                 <View style={styles.topicStatDetails}>
                   <Text style={styles.topicStatDetailText}>
-                    {topic.completed_sentences || 0} / {topic.total_sentences || 0} completed
+                      {completedSentences} / {totalSentences} completed
                   </Text>
                   <Text style={styles.topicStatDetailText}>
                     {topic.total_recordings || 0} recordings
                   </Text>
                 </View>
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
@@ -1094,29 +1153,67 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
     padding: SIZES.padding,
-    margin: SIZES.padding,
-    marginBottom: SIZES.base,
+    marginHorizontal: SIZES.padding,
+    marginBottom: SIZES.padding,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  courseInfoHeader: {
+  courseInfoContent: {
+    flexDirection: 'row',
+    gap: SIZES.padding,
+  },
+  courseInfoLeft: {
+    flex: 1,
+    minWidth: 0, // Allows text to wrap properly
+  },
+  courseInfoRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    minWidth: 100,
+    maxWidth: 140,
+  },
+  courseInfoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: SIZES.base,
+    gap: 8,
+  },
+  courseInfoIcon: {
+    flexShrink: 0,
   },
   courseInfoTitle: {
     fontSize: SIZES.h2,
     fontWeight: 'bold',
     color: COLORS.textLight,
-    marginBottom: SIZES.base,
+    flex: 1,
+    lineHeight: 28,
+  },
+  courseInfoDescription: {
+    fontSize: SIZES.body2,
+    color: COLORS.gray[400],
+    lineHeight: 20,
+    marginTop: 4,
   },
   courseInfoBadges: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 8,
-    flexWrap: 'wrap',
+    width: '100%',
+    alignItems: 'flex-end',
   },
   infoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 12,
+    gap: 6,
+    minWidth: 100,
+    justifyContent: 'flex-start',
   },
   levelBadge: {
     backgroundColor: COLORS.primary + '30',
@@ -1132,11 +1229,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textLight,
   },
-  courseInfoDescription: {
-    fontSize: SIZES.body2,
-    color: COLORS.gray[400],
-    lineHeight: 20,
+  courseInfoMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: SIZES.base,
+  },
+  courseInfoMetaText: {
+    fontSize: SIZES.caption,
+    color: COLORS.gray[400],
   },
   // Stats Row
   statsRow: {
@@ -1149,12 +1250,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
-    padding: SIZES.base,
+    padding: SIZES.base + 4,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    minHeight: 70,
+    minHeight: 80,
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   statValue: {
     fontSize: SIZES.h3,
@@ -1206,6 +1312,7 @@ const styles = StyleSheet.create({
   tabContent: {
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding,
+    paddingBottom: SIZES.padding * 1.5,
   },
   tabContentContainer: {
     paddingBottom: SIZES.padding * 2,
@@ -1381,18 +1488,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  topicProgressBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  topicProgressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 4,
+    marginBottom: SIZES.padding,
   },
   topicProgressText: {
     fontSize: SIZES.body3,
@@ -1400,6 +1496,9 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     minWidth: 45,
     textAlign: 'right',
+  },
+  topicActionContainer: {
+    alignItems: 'flex-end',
   },
   centerContainer: {
     flex: 1,
@@ -1433,8 +1532,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   // Recordings Accordion Styles
+  // Responsive spacing adjustments
   topicSection: {
-    marginBottom: SIZES.padding,
+    marginBottom: SIZES.padding + 4,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 12,
     borderWidth: 1,
@@ -1649,9 +1749,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
     padding: SIZES.padding,
-    marginBottom: SIZES.padding,
+    marginBottom: SIZES.padding + 4,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   analysisCardTitle: {
     fontSize: SIZES.h4,
@@ -1663,13 +1768,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: SIZES.base,
-    marginBottom: SIZES.base,
+    marginBottom: SIZES.padding * 4,
+    paddingBottom: SIZES.padding,
+  },
+  // Analysis specific stat cards (smaller, no flex: 1)
+  analysisStatCard: {
+    flex: 1,
+    minWidth: '45%',
+    maxWidth: '48%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: SIZES.base,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+  },
+  analysisStatValue: {
+    fontSize: SIZES.h3,
+    fontWeight: 'bold',
+    color: COLORS.textLight,
+    marginTop: 4,
+  },
+  analysisStatLabel: {
+    fontSize: SIZES.caption,
+    color: COLORS.gray[400],
+    marginTop: 2,
+    textAlign: 'center',
   },
   scoreRangeRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: SIZES.base,
-    paddingTop: SIZES.base,
+    marginTop: 0,
+    paddingTop: SIZES.padding * 2,
+    paddingBottom: SIZES.base,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -1709,17 +1841,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.primary,
   },
-  topicStatProgress: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 3,
-    overflow: 'hidden',
+  topicStatProgressContainer: {
     marginBottom: 8,
-  },
-  topicStatProgressBar: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 3,
   },
   topicStatDetails: {
     flexDirection: 'row',

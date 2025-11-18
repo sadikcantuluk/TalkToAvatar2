@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useCourses } from '../hooks/useCourses';
+import { useCourses, useCreateCourse, useDeleteCourse } from '../hooks/useCourseQueries';
 import { useAuth } from '../context';
 import { COLORS, SIZES } from '../constants';
 import { DashboardLayout, LanguageSelector, ConfirmDialog, CourseCardSkeleton, SkeletonList } from '../components';
@@ -49,29 +49,41 @@ const VALIDATION = {
 };
 
 const CoursesScreen = ({ navigation }) => {
-  const { courses: coursesFromHook, loading, error, createCourse, deleteCourse, fetchCourses } = useCourses();
+  const { data: coursesData = [], isLoading: loading, error, refetch } = useCourses();
+  const createCourseMutation = useCreateCourse();
+  const deleteCourseMutation = useDeleteCourse();
   const { token } = useAuth();
-  const [courses, setCourses] = useState([]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   
-  // Sync courses from hook and manage initial load state
+  // Sort courses by created_at - newest at the end
+  const courses = useMemo(() => {
+    if (!Array.isArray(coursesData) || coursesData.length === 0) {
+      return [];
+    }
+    return [...coursesData].sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      // Sort ascending (oldest first, newest last)
+      return dateA - dateB;
+    });
+  }, [coursesData]);
+  
+  // Mark initial load as complete when loading is done
   useEffect(() => {
-    setCourses(coursesFromHook);
-    // Mark initial load as complete when loading is done (regardless of data)
     if (!loading) {
       setIsInitialLoad(false);
     }
-  }, [coursesFromHook, loading]);
+  }, [loading]);
+  
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [courseTitle, setCourseTitle] = useState('');
   const [courseDescription, setCourseDescription] = useState('');
   const [courseLevel, setCourseLevel] = useState('A1');
   const [courseLanguage, setCourseLanguage] = useState('en');
-  const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingLocal, setIsCreatingLocal] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   
   // Validation errors
   const [errors, setErrors] = useState({
@@ -171,7 +183,7 @@ const CoursesScreen = ({ navigation }) => {
 
     try {
       console.log('🔄 [DEBUG] Starting course creation...');
-      setIsCreating(true);
+      setIsCreatingLocal(true);
 
       const courseData = {
         title: courseTitle.trim(),
@@ -184,17 +196,11 @@ const CoursesScreen = ({ navigation }) => {
       console.log('📤 [DEBUG] Sending course data:', courseData);
       console.log('🔑 [DEBUG] Token:', token.substring(0, 20) + '...');
 
-      const response = await createCourse(courseData);
+      await createCourseMutation.mutateAsync(courseData);
       
       console.log('✅ [SUCCESS] Course created successfully');
-      console.log('📦 [DEBUG] Response:', JSON.stringify(response, null, 2));
 
       handleCloseModal();
-      
-      // Refresh courses list
-      console.log('🔄 [DEBUG] Refreshing courses list...');
-      await fetchCourses();
-      console.log('✅ [SUCCESS] Courses list refreshed');
     } catch (err) {
       console.error('❌ [ERROR] Course creation failed');
       console.error('❌ [ERROR] Error object:', err);
@@ -210,10 +216,12 @@ const CoursesScreen = ({ navigation }) => {
         [{ text: 'OK' }]
       );
     } finally {
-      setIsCreating(false);
+      setIsCreatingLocal(false);
       console.log('🏁 [DEBUG] Course creation process finished');
     }
   };
+
+  const isCreating = createCourseMutation.isLoading || isCreatingLocal;
 
   const handleDeleteCourse = (courseId, courseTitle) => {
     console.log('🎯 [DEBUG] handleDeleteCourse called');
@@ -224,40 +232,24 @@ const CoursesScreen = ({ navigation }) => {
     setDeleteConfirmVisible(true);
   };
 
-  const confirmDeleteCourse = async () => {
+  const confirmDeleteCourse = () => {
     if (!courseToDelete) return;
 
-    try {
       console.log('🔄 [DEBUG] Starting course deletion...');
-      setIsDeleting(true);
-      
-      // Optimistically remove from UI immediately
-      const updatedCourses = courses.filter(c => c.id !== courseToDelete.id);
-      // We'll use a local state update here, but we need to access setCourses
-      // For now, we'll call deleteCourse which will refresh, but we can optimize later
-      
-      // Delete from backend in background (non-blocking)
-      Promise.resolve().then(async () => {
-        try {
-          await deleteCourse(courseToDelete.id);
-          console.log('✅ [SUCCESS] Course deleted from backend');
-        } catch (err) {
-          console.error('❌ [ERROR] Backend deletion failed:', err);
-          // Refresh to restore if backend delete failed
-          await fetchCourses();
-        }
-      });
-
-      // Optimistically update UI
-      setCourses(prev => prev.filter(c => c.id !== courseToDelete.id));
+    
+    // Close dialog immediately (optimistic update)
       setDeleteConfirmVisible(false);
+    const courseToDeleteId = courseToDelete.id;
       setCourseToDelete(null);
-    } catch (err) {
+    
+    // Delete course (optimistic update handled by React Query)
+    // Backend deletion happens in background
+    deleteCourseMutation.mutate(courseToDeleteId, {
+      onError: (err) => {
       console.error('❌ [ERROR] Course deletion failed:', err);
       Alert.alert('Error', err.message || 'Failed to delete course');
-    } finally {
-      setIsDeleting(false);
-    }
+      },
+    });
   };
 
   const handleCoursePress = (course) => {
@@ -274,7 +266,7 @@ const CoursesScreen = ({ navigation }) => {
     console.log('🔄 [DEBUG] Pull to refresh triggered');
     setRefreshing(true);
     try {
-      await fetchCourses();
+      await refetch();
       console.log('✅ [SUCCESS] Courses refreshed');
     } catch (err) {
       console.error('❌ [ERROR] Refresh failed:', err);
@@ -283,45 +275,101 @@ const CoursesScreen = ({ navigation }) => {
     }
   };
 
-  const renderCourseItem = ({ item }) => (
+  // Get badge color based on level
+  const getLevelColor = (level) => {
+    const levelColors = {
+      'A1': '#10b981', // Green
+      'A2': '#22c55e', // Light Green
+      'B1': '#84cc16', // Yellow-Green
+      'B2': '#f59e0b', // Orange
+      'C1': '#f97316', // Dark Orange
+      'C2': '#ef4444', // Red
+    };
+    return levelColors[level] || COLORS.primary;
+  };
+
+  // Get language flag emoji
+  const getLanguageFlag = (code) => {
+    const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
+    return lang?.flag || '🌐';
+  };
+
+  // Get icon based on level
+  const getLevelIcon = (level) => {
+    const levelIcons = {
+      'A1': 'school-outline',
+      'A2': 'library-outline',
+      'B1': 'document-text-outline',
+      'B2': 'trophy-outline',
+      'C1': 'star-outline',
+      'C2': 'ribbon-outline',
+    };
+    return levelIcons[level] || 'school-outline';
+  };
+
+  const renderCourseItem = ({ item }) => {
+    const levelColor = item.level ? getLevelColor(item.level) : COLORS.primary;
+    const languageFlag = item.language_code ? getLanguageFlag(item.language_code) : '🌐';
+    const levelIcon = item.level ? getLevelIcon(item.level) : 'school-outline';
+
+    return (
     <TouchableOpacity
       style={styles.courseCard}
       onPress={() => handleCoursePress(item)}
       activeOpacity={0.7}
     >
-      <View style={styles.courseHeader}>
+        {/* Card Header with Icon */}
+        <View style={styles.courseCardHeader}>
+          <View style={[styles.courseIconContainer, { backgroundColor: levelColor + '20' }]}>
+            <Ionicons name={levelIcon} size={28} color={levelColor} />
+        </View>
+        <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteCourse(item.id, item.title);
+            }}
+          style={styles.deleteButton}
+        >
+          <Ionicons name="trash-outline" size={20} color={COLORS.error || '#ef4444'} />
+        </TouchableOpacity>
+      </View>
+
+        {/* Course Info */}
         <View style={styles.courseInfo}>
-          <Text style={styles.courseTitle}>{item.title}</Text>
+          <Text style={styles.courseTitle} numberOfLines={2}>{item.title}</Text>
           {item.description && (
             <Text style={styles.courseDescription} numberOfLines={2}>
               {item.description}
             </Text>
           )}
         </View>
-        <TouchableOpacity
-          onPress={() => handleDeleteCourse(item.id, item.title)}
-          style={styles.deleteButton}
-        >
-          <Ionicons name="trash-outline" size={20} color={COLORS.error || '#ef4444'} />
-        </TouchableOpacity>
-      </View>
+
+        {/* Course Meta Badges */}
       <View style={styles.courseMeta}>
         {item.level && (
-          <View style={styles.metaBadge}>
-            <Text style={styles.metaText}>{item.level}</Text>
+            <View style={[styles.metaBadge, styles.levelBadge, { backgroundColor: levelColor + '30', borderColor: levelColor + '50' }]}>
+              <Ionicons name="school-outline" size={14} color={levelColor} />
+              <Text style={[styles.metaText, { color: levelColor }]}>{item.level}</Text>
           </View>
         )}
         {item.language_code && (
-          <View style={styles.metaBadge}>
+            <View style={[styles.metaBadge, styles.languageBadge]}>
+              <Text style={styles.languageFlag}>{languageFlag}</Text>
             <Text style={styles.metaText}>{item.language_code.toUpperCase()}</Text>
           </View>
         )}
         <View style={[styles.metaBadge, styles.statusBadge]}>
+            <Ionicons 
+              name={item.status === 'active' ? 'checkmark-circle-outline' : 'time-outline'} 
+              size={14} 
+              color="#f59e0b" 
+            />
           <Text style={styles.metaText}>{item.status || 'active'}</Text>
         </View>
       </View>
     </TouchableOpacity>
   );
+  };
 
   const renderSkeleton = () => (
     <SkeletonList
@@ -332,21 +380,26 @@ const CoursesScreen = ({ navigation }) => {
     />
   );
 
+  // Format error message properly
+  const errorMessage = error?.message || (typeof error === 'string' ? error : error?.error || 'An error occurred');
+
   if (error) {
     return (
       <DashboardLayout>
         <View style={styles.centerContainer}>
           <Ionicons name="alert-circle-outline" size={48} color={COLORS.error || '#ef4444'} />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+          {!errorMessage.includes('Session expired') && (
           <TouchableOpacity
             style={styles.retryButton}
             onPress={async () => {
               console.log('🔄 [DEBUG] Retry button pressed');
-              await fetchCourses();
+                await refetch();
             }}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.retryButton, { marginTop: 10, backgroundColor: COLORS.gray[600] }]}
             onPress={() => navigation.goBack()}
@@ -370,7 +423,18 @@ const CoursesScreen = ({ navigation }) => {
     <DashboardLayout navigation={navigation} currentMode="sualingo">
       <View style={styles.container}>
         <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTitleContainer}>
+              <View style={styles.headerIconContainer}>
+                <Ionicons name="book" size={24} color={COLORS.primary} />
+              </View>
+              <View>
           <Text style={styles.headerTitle}>My Courses</Text>
+                <Text style={styles.headerSubtitle}>
+                  {courses.length} {courses.length === 1 ? 'course' : 'courses'}
+                </Text>
+              </View>
+            </View>
           <TouchableOpacity
             style={styles.addButton}
             onPress={handleCreateCourse}
@@ -379,14 +443,18 @@ const CoursesScreen = ({ navigation }) => {
             {isCreating ? (
               <ActivityIndicator size="small" color={COLORS.white} />
             ) : (
-              <Ionicons name="add" size={24} color={COLORS.white} />
+                <>
+                  <Ionicons name="add" size={20} color={COLORS.white} />
+                  <Text style={styles.addButtonText}>New</Text>
+                </>
             )}
           </TouchableOpacity>
+          </View>
         </View>
 
         {loading || isInitialLoad ? (
           renderSkeleton()
-        ) : courses.length === 0 ? (
+        ) : (courses || []).length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="book-outline" size={64} color={COLORS.textLight} />
             <Text style={styles.emptyText}>No courses yet</Text>
@@ -407,13 +475,13 @@ const CoursesScreen = ({ navigation }) => {
           </View>
         ) : (
           <FlatList
-            data={courses}
+            data={courses || []}
             renderItem={renderCourseItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id?.toString() || item.id}
             style={{ flex: 1 }}
             contentContainerStyle={[
               styles.listContent,
-              courses.length === 0 && { flexGrow: 1 }
+              (courses || []).length === 0 && { flexGrow: 1 }
             ]}
             refreshing={refreshing}
             onRefresh={handleRefresh}
@@ -586,7 +654,7 @@ const CoursesScreen = ({ navigation }) => {
             setDeleteConfirmVisible(false);
             setCourseToDelete(null);
           }}
-          loading={isDeleting}
+          loading={deleteCourseMutation.isLoading}
         />
       </View>
     </DashboardLayout>
@@ -599,77 +667,148 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundDark,
   },
   header: {
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+    paddingBottom: SIZES.base,
+    backgroundColor: 'transparent',
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SIZES.padding,
-    backgroundColor: 'transparent',
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  headerIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
   },
   headerTitle: {
     fontSize: SIZES.h1,
     fontWeight: 'bold',
     color: COLORS.textLight,
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    fontSize: SIZES.body3,
+    color: COLORS.gray[400],
+    fontWeight: '500',
   },
   addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  addButtonText: {
+    color: COLORS.white,
+    fontSize: SIZES.body2,
+    fontWeight: '600',
   },
   listContent: {
     padding: SIZES.padding,
   },
   courseCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: SIZES.radius,
+    borderRadius: 16,
     padding: SIZES.padding,
     marginBottom: SIZES.padding,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  courseHeader: {
+  courseCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: SIZES.base,
   },
+  courseIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
   courseInfo: {
-    flex: 1,
-    marginRight: SIZES.base,
+    marginBottom: SIZES.base,
   },
   courseTitle: {
     fontSize: SIZES.h3,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: COLORS.textLight,
-    marginBottom: 4,
+    marginBottom: 6,
+    lineHeight: 24,
   },
   courseDescription: {
-    fontSize: SIZES.body,
+    fontSize: SIZES.body2,
     color: COLORS.gray[400],
+    lineHeight: 20,
   },
   deleteButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
   },
   courseMeta: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    marginTop: 4,
   },
   metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 8,
     borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  levelBadge: {
+    // Dynamic color applied inline
+  },
+  languageBadge: {
+    backgroundColor: '#10b981' + '20',
+    borderColor: '#10b981' + '40',
   },
   statusBadge: {
-    backgroundColor: COLORS.primary + '30',
+    backgroundColor: '#f59e0b' + '20',
+    borderColor: '#f59e0b' + '40',
+  },
+  languageFlag: {
+    fontSize: 16,
   },
   metaText: {
     fontSize: SIZES.caption,
     color: COLORS.textLight,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   centerContainer: {
     flex: 1,

@@ -73,7 +73,18 @@ export const NotificationProvider = ({ children, authToken, authUser }) => {
       const localNotifications = stored ? JSON.parse(stored) : [];
       
       // Load notifications from backend
-      const backendNotifications = await notificationsAPI.getAll(token);
+      let backendNotifications = [];
+      try {
+        backendNotifications = await notificationsAPI.getAll(token);
+      } catch (error) {
+        // Handle 401 Unauthorized - don't sync, just log
+        if (error?.response?.status === 401 || error?.status === 401 || error?.error === 'Unauthorized') {
+          console.warn('⚠️ [NotificationContext] Unauthorized - skipping sync');
+          return;
+        }
+        console.error('⚠️ Error syncing notifications with backend:', error?.response?.data || error?.error || error);
+        // Continue with local notifications only
+      }
       
       // Create a map of backend notifications by their ID
       const backendMap = new Map();
