@@ -25,6 +25,7 @@ import {
 import { COLORS, SIZES } from '../constants';
 import { useAuth } from '../context';
 import { playAudio, stopAudio } from '../services/openAI';
+import coursesAPI from '../services/coursesAPI';
 import {
   useCourse,
   useCourseSubjects,
@@ -33,9 +34,11 @@ import {
   useCourseAnalyses,
   useCourseProgress,
   useDeleteCourse,
+  courseKeys,
 } from '../hooks/useCourseQueries';
 import { useCourseStatistics } from '../hooks/useCourseStatistics';
 import { calculateStreakFromGrouped } from '../utils/streakCalculator';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -45,7 +48,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const CourseDetailScreen = ({ route, navigation }) => {
   const { courseId, course: initialCourse } = route.params || {};
   const [activeTab, setActiveTab] = useState('overview');
-  
+  const queryClient = useQueryClient();
+  const { token } = useAuth();
   
   // React Query hooks - data is automatically cached
   const courseQuery = useCourse(courseId);
@@ -61,6 +65,16 @@ const CourseDetailScreen = ({ route, navigation }) => {
   
   // Computed statistics from cache (no API calls)
   const { statistics } = useCourseStatistics(courseId);
+
+  // Manually fetch analyses when analyses tab is active (since query is disabled by default)
+  useEffect(() => {
+    if (activeTab === 'analyses' && token && courseId && !analysesQuery.data && !analysesQuery.isLoading) {
+      queryClient.fetchQuery({
+        queryKey: courseKeys.analyses(courseId),
+        queryFn: () => coursesAPI.getAnalyses(token, courseId),
+      });
+    }
+  }, [activeTab, courseId, token, analysesQuery.data, analysesQuery.isLoading, queryClient]);
   
   // Use initial course if available, otherwise use query data
   const course = initialCourse || courseQuery.data;
@@ -742,6 +756,60 @@ const CourseDetailScreen = ({ route, navigation }) => {
                         return '#f59e0b';
                       };
                       
+                      // Helper function to get word score color (same as Sualingo)
+                      const getWordScoreColor = (score) => {
+                        if (score >= 90) return '#10b981'; // Yeşil
+                        if (score >= 70) return '#84cc16'; // Açık Yeşil
+                        if (score >= 50) return '#f59e0b'; // Sarı
+                        return '#ef4444'; // Kırmızı
+                      };
+
+                      // Process words: combine reference text with spoken words (same logic as Sualingo)
+                      const processWords = (words, referenceText) => {
+                        if (!referenceText && words.length > 0) {
+                          // If no reference text, just use words from API
+                          return words.map(w => ({
+                            word: w.word || '',
+                            accuracy_score: w.accuracy_score || 0,
+                            error_type: w.error_type || null,
+                            referenceWord: w.word || '',
+                          }));
+                        }
+
+                        const referenceWords = referenceText ? referenceText.split(/\s+/) : [];
+                        const spokenWordsMap = {};
+                        
+                        words.forEach(word => {
+                          const wordText = (word.word || '').toLowerCase();
+                          if (wordText) {
+                            spokenWordsMap[wordText] = word;
+                          }
+                        });
+                        
+                        return referenceWords.map((refWord) => {
+                          const refWordLower = refWord.toLowerCase().replace(/[.,!?]/g, '');
+                          const spokenWord = spokenWordsMap[refWordLower];
+                          
+                          if (spokenWord) {
+                            return {
+                              word: spokenWord.word || refWord,
+                              accuracy_score: spokenWord.accuracy_score || 0,
+                              error_type: spokenWord.error_type || null,
+                              referenceWord: refWord,
+                            };
+                          } else {
+                            return {
+                              word: refWord,
+                              accuracy_score: 0,
+                              error_type: 'Omission',
+                              referenceWord: refWord,
+                            };
+                          }
+                        });
+                      };
+
+                      const processedWords = processWords(report.words || [], report.reference_text || '');
+                      
                       return (
                         <View key={report.id} style={styles.reportItem}>
                           <TouchableOpacity
@@ -799,21 +867,33 @@ const CourseDetailScreen = ({ route, navigation }) => {
                               </View>
 
                               {/* Word-level Details */}
-                              {report.words && report.words.length > 0 && (
+                              {processedWords && processedWords.length > 0 && (
                                 <View style={styles.reportDetailSection}>
                                   <Text style={styles.reportDetailLabel}>Word-level Analysis:</Text>
                                   <ScrollView 
                                     style={styles.wordAnalysisContainer}
                                     nestedScrollEnabled={true}
                                   >
-                                    {report.words.map((word, index) => {
-                                      const hasError = word.error_type && word.error_type.length > 0;
+                                    {processedWords.map((word, index) => {
+                                      const score = word.accuracy_score || 0;
+                                      const color = getWordScoreColor(score);
+                                      const hasError = word.error_type && word.error_type.length > 0 && word.error_type !== 'None';
+                                      const isMissing = score === 0 && (word.error_type === 'Omission' || word.error_type === 'Missing');
+                                      
                                       return (
-                                        <View key={index} style={[styles.wordItem, hasError && styles.wordItemError]}>
-                                          <Text style={styles.wordText}>{word.word || 'N/A'}</Text>
-                                          <Text style={styles.wordScore}>
-                                            {Math.round(word.accuracy_score || 0)}%
-                                          </Text>
+                                        <View key={index} style={styles.wordItemContainer}>
+                                          <View style={styles.wordItemHeader}>
+                                            <Text style={styles.wordText}>
+                                              {word.referenceWord || word.word || 'N/A'}
+                                              {isMissing && <Text style={styles.missingText}> (eksik)</Text>}
+                                            </Text>
+                                            <Text style={[styles.wordScore, { color }]}>
+                                              {Math.round(score)}%
+                                            </Text>
+                                          </View>
+                                          <View style={styles.wordBarContainer}>
+                                            <View style={[styles.wordBar, { backgroundColor: color, width: `${Math.max(score, 5)}%` }]} />
+                                          </View>
                                           {hasError && (
                                             <View style={styles.wordErrorBadge}>
                                               <Text style={styles.wordErrorText}>{word.error_type}</Text>
@@ -970,7 +1050,7 @@ const CourseDetailScreen = ({ route, navigation }) => {
           </View>
         )}
 
-        {/* Error Analysis */}
+        {/* Error Analysis 
         {error_analysis && error_analysis.length > 0 && (
           <View style={styles.analysisCard}>
             <Text style={styles.analysisCardTitle}>Error Analysis</Text>
@@ -984,6 +1064,8 @@ const CourseDetailScreen = ({ route, navigation }) => {
             ))}
           </View>
         )}
+  */} 
+
       </ScrollView>
     );
   };
@@ -1706,19 +1788,14 @@ const styles = StyleSheet.create({
     maxHeight: 200,
     marginTop: 8,
   },
-  wordItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    marginBottom: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 6,
-    gap: 8,
+  wordItemContainer: {
+    marginBottom: 12,
   },
-  wordItemError: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#ef4444',
+  wordItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   wordText: {
     fontSize: SIZES.body2,
@@ -1726,18 +1803,33 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     flex: 1,
   },
+  missingText: {
+    color: '#ef4444',
+    fontStyle: 'italic',
+  },
   wordScore: {
-    fontSize: SIZES.body3,
-    color: COLORS.primary,
-    fontWeight: '600',
-    minWidth: 40,
-    textAlign: 'right',
+    fontSize: SIZES.body2,
+    fontWeight: 'bold',
+    marginLeft: 12,
+  },
+  wordBarContainer: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  wordBar: {
+    height: '100%',
+    borderRadius: 4,
   },
   wordErrorBadge: {
     backgroundColor: '#ef4444',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 4,
   },
   wordErrorText: {
     fontSize: SIZES.caption,

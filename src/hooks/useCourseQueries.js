@@ -325,7 +325,7 @@ export const useCourseAnalyses = (courseId) => {
         throw new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
       }
     }, `useCourseAnalyses-${courseId}`),
-    enabled: !!token && !!courseId,
+    enabled: false, // Disabled: Analysis stat is computed from other stats, no need to fetch
     staleTime: 2 * 60 * 1000,
     cacheTime: 5 * 60 * 1000,
     retry: (failureCount, error) => {

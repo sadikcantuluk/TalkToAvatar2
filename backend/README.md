@@ -60,6 +60,14 @@ rails server -p 3000
 
 The API will be available at `http://localhost:3000/api/v1`
 
+## API Documentation
+
+Swagger/OpenAPI dokümantasyonu: http://localhost:3000/api-docs
+
+Swagger JSON/YAML: http://localhost:3000/api-docs/v1/swagger.yaml
+
+Swagger UI'de tüm endpoint'leri görebilir, test edebilir ve request/response örneklerini inceleyebilirsiniz.
+
 ## API Endpoints
 
 ### Sentences

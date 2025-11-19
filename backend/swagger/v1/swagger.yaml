@@ -1,0 +1,3086 @@
+---
+openapi: 3.0.1
+info:
+  title: TalkToAvatar API V1
+  version: v1
+  description: API documentation for TalkToAvatar backend
+  contact:
+    name: API Support
+    email: support@talktoavatar.com
+servers:
+- url: http://localhost:3000
+  description: Development server
+- url: https://api.talktoavatar.com
+  description: Production server
+components:
+  securitySchemes:
+    bearer_auth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+paths:
+  "/api/v1/analyses":
+    get:
+      summary: Get all analyses
+      tags:
+      - Analyses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Analyses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    course_id:
+                      type: string
+                    analysis_type:
+                      type: string
+                    data:
+                      type: object
+                    summary:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new analysis
+      tags:
+      - Analyses
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Analysis created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  analysis:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      course_id:
+                        type: string
+                      analysis_type:
+                        type: string
+                      data:
+                        type: object
+                      summary:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                analysis:
+                  type: object
+                  properties:
+                    course_id:
+                      type: string
+                      example: uuid
+                    analysis_type:
+                      type: string
+                      example: performance
+                    data:
+                      type: object
+                      example:
+                        score: 85
+                    summary:
+                      type: string
+                      example: Analysis summary
+                  required:
+                  - course_id
+                  - analysis_type
+                  - data
+  "/api/v1/analyses/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Analysis ID
+      schema:
+        type: string
+    get:
+      summary: Get analysis by ID
+      tags:
+      - Analyses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Analysis retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  course_id:
+                    type: string
+                  analysis_type:
+                    type: string
+                  data:
+                    type: object
+                  summary:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Analysis not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update an analysis
+      tags:
+      - Analyses
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: Analysis updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  analysis:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      course_id:
+                        type: string
+                      analysis_type:
+                        type: string
+                      data:
+                        type: object
+                      summary:
+                        type: string
+                      updated_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                analysis:
+                  type: object
+                  properties:
+                    analysis_type:
+                      type: string
+                    data:
+                      type: object
+                    summary:
+                      type: string
+    delete:
+      summary: Delete an analysis
+      tags:
+      - Analyses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Analysis deleted successfully
+        '404':
+          description: Analysis not found
+  "/api/v1/upload_audio":
+    post:
+      summary: Upload audio file
+      tags:
+      - Audio
+      parameters: []
+      responses:
+        '200':
+          description: Audio uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    example: https://example.com/audio.mp3
+        '400':
+          description: No audio file provided
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: file
+        required: true
+        description: Audio file
+  "/api/v1/evaluate":
+    post:
+      summary: Evaluate pronunciation
+      tags:
+      - Audio
+      parameters: []
+      responses:
+        '200':
+          description: Pronunciation evaluated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  overall_score:
+                    type: number
+                    example: 85.5
+                  accuracy:
+                    type: number
+                    example: 90.0
+                  fluency:
+                    type: number
+                    example: 80.0
+                  completeness:
+                    type: number
+                    example: 85.0
+                  words:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        word:
+                          type: string
+                        accuracy_score:
+                          type: number
+                        error_type:
+                          type: string
+                        offset:
+                          type: integer
+                        duration:
+                          type: integer
+                  transcript:
+                    type: string
+                  reference_text:
+                    type: string
+                  score:
+                    type: number
+                  accuracy_score:
+                    type: number
+                  fluency_score:
+                    type: number
+                  completeness_score:
+                    type: number
+                  word_level_details:
+                    type: array
+                  feedback:
+                    type: string
+                  detailed_scores:
+                    type: object
+                    properties:
+                      overall:
+                        type: number
+                      accuracy:
+                        type: number
+                      fluency:
+                        type: number
+                      completeness:
+                        type: number
+        '400':
+          description: Missing required parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: file
+          application/json:
+            schema:
+              type: file
+        description: Audio file
+  "/api/v1/auth/register":
+    post:
+      summary: Register a new user
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user_id:
+                    type: string
+                  email:
+                    type: string
+                  email_sent:
+                    type: boolean
+                required:
+                - message
+                - user_id
+                - email
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                      example: user@example.com
+                    username:
+                      type: string
+                      example: johndoe
+                    password:
+                      type: string
+                      example: Password123
+                    password_confirmation:
+                      type: string
+                      example: Password123
+                  required:
+                  - email
+                  - username
+                  - password
+                  - password_confirmation
+  "/api/v1/auth/login":
+    post:
+      summary: Login user
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+                required:
+                - token
+                - user
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auth:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                      example: user@example.com
+                    password:
+                      type: string
+                      example: Password123
+                  required:
+                  - email
+                  - password
+  "/api/v1/auth/verify_email":
+    post:
+      summary: Verify email
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+                required:
+                - message
+                - token
+                - user
+        '422':
+          description: Invalid verification code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                  example: uuid
+                code:
+                  type: string
+                  example: '123456'
+              required:
+              - user_id
+              - code
+  "/api/v1/auth/resend_verification":
+    post:
+      summary: Resend verification code
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '200':
+          description: Verification code sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                  example: uuid
+              required:
+              - user_id
+  "/api/v1/auth/forgot_password":
+    post:
+      summary: Forgot password
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '200':
+          description: Password reset instructions sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  reset_token:
+                    type: string
+        '404':
+          description: Email not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  example: user@example.com
+              required:
+              - email
+  "/api/v1/auth/reset_password":
+    post:
+      summary: Reset password
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '422':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  example: reset-token
+                password:
+                  type: string
+                  example: NewPassword123
+              required:
+              - token
+              - password
+  "/api/v1/auth/profile":
+    get:
+      summary: Get user profile
+      tags:
+      - Authentication
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      username:
+                        type: string
+                      email:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/auth/update_profile":
+    put:
+      summary: Update user profile
+      tags:
+      - Authentication
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      username:
+                        type: string
+                      email:
+                        type: string
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    username:
+                      type: string
+                      example: newusername
+                  required:
+                  - username
+  "/api/v1/auth/change_password":
+    put:
+      summary: Change password
+      tags:
+      - Authentication
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '422':
+          description: Current password incorrect
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password_change:
+                  type: object
+                  properties:
+                    current_password:
+                      type: string
+                      example: Password123
+                    new_password:
+                      type: string
+                      example: NewPassword123
+                  required:
+                  - current_password
+                  - new_password
+  "/api/v1/auth/delete_account":
+    delete:
+      summary: Delete account
+      tags:
+      - Authentication
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Account deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/conversations":
+    get:
+      summary: Get all conversations
+      tags:
+      - Conversations
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Conversations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    user_text:
+                      type: string
+                    translated_text:
+                      type: string
+                    user_language:
+                      type: string
+                    target_language:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new conversation
+      tags:
+      - Conversations
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Conversation saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  conversation:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      user_text:
+                        type: string
+                      translated_text:
+                        type: string
+                      user_language:
+                        type: string
+                      target_language:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation:
+                  type: object
+                  properties:
+                    user_text:
+                      type: string
+                      example: Hello
+                    translated_text:
+                      type: string
+                      example: Hola
+                    user_language:
+                      type: string
+                      example: en
+                    target_language:
+                      type: string
+                      example: es
+                  required:
+                  - user_text
+                  - translated_text
+                  - user_language
+                  - target_language
+  "/api/v1/conversations/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Conversation ID
+      schema:
+        type: string
+    get:
+      summary: Get conversation by ID
+      tags:
+      - Conversations
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Conversation retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  user_text:
+                    type: string
+                  translated_text:
+                    type: string
+                  user_language:
+                    type: string
+                  target_language:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Delete a conversation
+      tags:
+      - Conversations
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Conversation deleted successfully
+        '404':
+          description: Conversation not found
+  "/api/v1/courses":
+    get:
+      summary: List all courses
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    title:
+                      type: string
+                    description:
+                      type: string
+                    language_code:
+                      type: string
+                    level:
+                      type: string
+                    status:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new course
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Course created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  course:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      language_code:
+                        type: string
+                      level:
+                        type: string
+                      status:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: English A1 Course
+                description:
+                  type: string
+                  example: Beginner English course
+                language_code:
+                  type: string
+                  example: en
+                level:
+                  type: string
+                  example: A1
+              required:
+              - title
+              - language_code
+              - level
+  "/api/v1/courses/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get a course
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Course retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  language_code:
+                    type: string
+                  level:
+                    type: string
+                  status:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update a course
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: Course updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  course:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      language_code:
+                        type: string
+                      level:
+                        type: string
+                      status:
+                        type: string
+                      updated_at:
+                        type: string
+                        format: date_time
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                language_code:
+                  type: string
+                level:
+                  type: string
+    delete:
+      summary: Delete a course
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Course deleted successfully
+  "/api/v1/courses/{id}/subjects":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get course subjects
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Subjects retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    topic:
+                      type: string
+                    title:
+                      type: string
+                    progress_percentage:
+                      type: number
+                    completed_sentences:
+                      type: integer
+                    total_sentences:
+                      type: integer
+  "/api/v1/courses/{id}/recordings":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get course recordings
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Recordings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    topic:
+                      type: string
+                    topic_title:
+                      type: string
+                    sentences:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          sentence_id:
+                            type: string
+                          sentence:
+                            type: string
+                          recordings:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                score:
+                                  type: number
+                                created_at:
+                                  type: string
+                                  format: date_time
+  "/api/v1/courses/{id}/reports":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get course reports
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Reports retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    topic:
+                      type: string
+                    topic_title:
+                      type: string
+                    sentences:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          sentence_id:
+                            type: string
+                          sentence:
+                            type: string
+                          reports:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                score:
+                                  type: number
+                                accuracy_score:
+                                  type: number
+                                fluency_score:
+                                  type: number
+                                completeness_score:
+                                  type: number
+  "/api/v1/courses/{id}/analyses":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get course analyses
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Analyses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  overall:
+                    type: object
+                    properties:
+                      avg_score:
+                        type: string
+                      success_rate:
+                        type: string
+                      completion_rate:
+                        type: string
+                      total_recordings:
+                        type: integer
+                      max_score:
+                        type: string
+                      min_score:
+                        type: string
+                      success_count:
+                        type: integer
+                  topics:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        topic_title:
+                          type: string
+                        completed_sentences:
+                          type: integer
+                        total_sentences:
+                          type: integer
+                        total_recordings:
+                          type: integer
+                  time_series:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        avg_score:
+                          type: string
+                        practices:
+                          type: integer
+                  error_analysis:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        error_type:
+                          type: string
+                        count:
+                          type: integer
+  "/api/v1/courses/{id}/progress":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get course progress
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Progress retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  overall_progress:
+                    type: number
+                  topic_progress:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        topic:
+                          type: string
+                        title:
+                          type: string
+                        progress:
+                          type: number
+                        completed_status:
+                          type: boolean
+                  weekly_stats:
+                    type: object
+                    properties:
+                      practices:
+                        type: integer
+                      avg_score:
+                        type: number
+                      streak:
+                        type: integer
+                  completed_sentences:
+                    type: integer
+  "/api/v1/courses/{id}/practice_sentences":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get course practice sentences
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Practice sentences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    language_code:
+                      type: string
+                    level:
+                      type: string
+                    topic:
+                      type: string
+                    sentence:
+                      type: string
+                    order:
+                      type: integer
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+  "/api/v1/courses/{id}/videos":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Course ID
+      schema:
+        type: string
+    get:
+      summary: Get course videos
+      tags:
+      - Courses
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Videos retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    local_uri:
+                      type: string
+                    text:
+                      type: string
+                    avatar_info:
+                      type: object
+                    audio_info:
+                      type: object
+                    status:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+  "/api/v1/notifications":
+    get:
+      summary: Get all notifications
+      tags:
+      - Notifications
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    title:
+                      type: string
+                    message:
+                      type: string
+                    type:
+                      type: string
+                    read:
+                      type: boolean
+                    created_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new notification
+      tags:
+      - Notifications
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Notification created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  notification:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      title:
+                        type: string
+                      message:
+                        type: string
+                      type:
+                        type: string
+                      read:
+                        type: boolean
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notification:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                      example: New Notification
+                    message:
+                      type: string
+                      example: Notification message
+                    type:
+                      type: string
+                      example: info
+                  required:
+                  - title
+                  - message
+                  - type
+    delete:
+      summary: Delete all notifications
+      tags:
+      - Notifications
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: All notifications deleted successfully
+  "/api/v1/notifications/{id}/mark_read":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Notification ID
+      schema:
+        type: string
+    put:
+      summary: Mark notification as read
+      tags:
+      - Notifications
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/notifications/mark_all_read":
+    put:
+      summary: Mark all notifications as read
+      tags:
+      - Notifications
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  "/api/v1/notifications/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Notification ID
+      schema:
+        type: string
+    delete:
+      summary: Delete a notification
+      tags:
+      - Notifications
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Notification deleted successfully
+        '404':
+          description: Notification not found
+  "/api/v1/practice_sentences":
+    get:
+      summary: Get all practice sentences
+      tags:
+      - Practice Sentences
+      security:
+      - bearer_auth: []
+      parameters:
+      - name: language_code
+        in: query
+        required: false
+        description: Language code
+        schema:
+          type: string
+      - name: level
+        in: query
+        required: false
+        description: Level (A1, A2, B1, B2, C1, C2)
+        schema:
+          type: string
+      - name: topic
+        in: query
+        required: false
+        description: Topic
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Practice sentences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    language_code:
+                      type: string
+                    level:
+                      type: string
+                    topic:
+                      type: string
+                    sentence:
+                      type: string
+                    order:
+                      type: integer
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/practice_sentences/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Practice Sentence ID
+      schema:
+        type: string
+    get:
+      summary: Get practice sentence by ID
+      tags:
+      - Practice Sentences
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Practice sentence retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  language_code:
+                    type: string
+                  level:
+                    type: string
+                  topic:
+                    type: string
+                  sentence:
+                    type: string
+                  order:
+                    type: integer
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Practice sentence not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/recordings":
+    get:
+      summary: Get all recordings
+      tags:
+      - Recordings
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Recordings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    level:
+                      type: string
+                    transcript:
+                      type: string
+                    reference_text:
+                      type: string
+                    score:
+                      type: number
+                    language_code:
+                      type: string
+                    local_uri:
+                      type: string
+                    accuracy:
+                      type: number
+                    fluency:
+                      type: number
+                    completeness:
+                      type: number
+                    words:
+                      type: array
+                      items:
+                        type: object
+                    created_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new recording
+      tags:
+      - Recordings
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Recording created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  recording:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      level:
+                        type: string
+                      transcript:
+                        type: string
+                      reference_text:
+                        type: string
+                      score:
+                        type: number
+                      language_code:
+                        type: string
+                      accuracy:
+                        type: number
+                      fluency:
+                        type: number
+                      completeness:
+                        type: number
+                      words:
+                        type: array
+                      course_id:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recording:
+                  type: object
+                  properties:
+                    level:
+                      type: string
+                      example: A1
+                    sentence:
+                      type: string
+                      example: Hello world
+                    user_transcript:
+                      type: string
+                      example: Hello world
+                    language_code:
+                      type: string
+                      example: en
+                    user_audio_uri:
+                      type: string
+                      example: https://example.com/audio.mp3
+                    pronunciation_score:
+                      type: number
+                      example: 85.5
+                    accuracy_score:
+                      type: number
+                      example: 90.0
+                    fluency_score:
+                      type: number
+                      example: 80.0
+                    completeness_score:
+                      type: number
+                      example: 85.0
+                    course_id:
+                      type: string
+                    practice_sentence_id:
+                      type: string
+                    topic:
+                      type: string
+                    word_level_details:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          word:
+                            type: string
+                          accuracy_score:
+                            type: number
+                          error_type:
+                            type: string
+                          offset:
+                            type: integer
+                          duration:
+                            type: integer
+                  required:
+                  - level
+                  - sentence
+                  - user_audio_uri
+  "/api/v1/recordings/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Recording ID
+      schema:
+        type: string
+    get:
+      summary: Get recording by ID
+      tags:
+      - Recordings
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Recording retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  level:
+                    type: string
+                  transcript:
+                    type: string
+                  reference_text:
+                    type: string
+                  score:
+                    type: number
+                  language_code:
+                    type: string
+                  local_uri:
+                    type: string
+                  accuracy:
+                    type: number
+                  fluency:
+                    type: number
+                  completeness:
+                    type: number
+                  words:
+                    type: array
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Recording not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Delete a recording
+      tags:
+      - Recordings
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Recording deleted successfully
+        '404':
+          description: Recording not found
+  "/api/v1/reports":
+    get:
+      summary: Get all reports
+      tags:
+      - Reports
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Reports retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    course_id:
+                      type: string
+                    title:
+                      type: string
+                    content:
+                      type: string
+                    report_type:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new report
+      tags:
+      - Reports
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Report created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  report:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      course_id:
+                        type: string
+                      title:
+                        type: string
+                      content:
+                        type: string
+                      report_type:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                report:
+                  type: object
+                  properties:
+                    course_id:
+                      type: string
+                      example: uuid
+                    title:
+                      type: string
+                      example: New Report
+                    content:
+                      type: string
+                      example: Report content
+                    report_type:
+                      type: string
+                      example: progress
+                  required:
+                  - course_id
+                  - title
+                  - content
+                  - report_type
+  "/api/v1/reports/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Report ID
+      schema:
+        type: string
+    get:
+      summary: Get report by ID
+      tags:
+      - Reports
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Report retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  course_id:
+                    type: string
+                  title:
+                    type: string
+                  content:
+                    type: string
+                  report_type:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update a report
+      tags:
+      - Reports
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: Report updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  report:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      course_id:
+                        type: string
+                      title:
+                        type: string
+                      content:
+                        type: string
+                      report_type:
+                        type: string
+                      updated_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                report:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    content:
+                      type: string
+                    report_type:
+                      type: string
+    delete:
+      summary: Delete a report
+      tags:
+      - Reports
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Report deleted successfully
+        '404':
+          description: Report not found
+  "/api/v1/sentences":
+    get:
+      summary: Get sentences by level
+      tags:
+      - Sentences
+      parameters:
+      - name: level
+        in: query
+        required: true
+        description: Level (A1, A2, B1, B2, C1, C2)
+        schema:
+          type: string
+      - name: language
+        in: query
+        required: false
+        description: 'Language code (default: en)'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Sentences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    text:
+                      type: string
+                    sentence:
+                      type: string
+                    level:
+                      type: string
+                    language_code:
+                      type: string
+        '400':
+          description: Invalid level
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/sentences/translations":
+    post:
+      summary: Create translation
+      tags:
+      - Sentences
+      parameters: []
+      responses:
+        '201':
+          description: Translation saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  sentence:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      level:
+                        type: string
+                      language_code:
+                        type: string
+                      sentence:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '200':
+          description: Sentence already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  sentence:
+                    type: object
+        '400':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                level:
+                  type: string
+                  example: A1
+                language_code:
+                  type: string
+                  example: en
+                sentence:
+                  type: string
+                  example: Hello, how are you?
+              required:
+              - level
+              - language_code
+              - sentence
+  "/api/v1/subjects":
+    get:
+      summary: Get all subjects
+      tags:
+      - Subjects
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Subjects retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    course_id:
+                      type: string
+                    title:
+                      type: string
+                    description:
+                      type: string
+                    order:
+                      type: integer
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new subject
+      tags:
+      - Subjects
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Subject created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  subject:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      course_id:
+                        type: string
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      order:
+                        type: integer
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject:
+                  type: object
+                  properties:
+                    course_id:
+                      type: string
+                      example: uuid
+                    title:
+                      type: string
+                      example: New Subject
+                    description:
+                      type: string
+                      example: Subject description
+                    order:
+                      type: integer
+                      example: 1
+                  required:
+                  - course_id
+                  - title
+  "/api/v1/subjects/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Subject ID
+      schema:
+        type: string
+    get:
+      summary: Get subject by ID
+      tags:
+      - Subjects
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Subject retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  course_id:
+                    type: string
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  order:
+                    type: integer
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Subject not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update a subject
+      tags:
+      - Subjects
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: Subject updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  subject:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      course_id:
+                        type: string
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      order:
+                        type: integer
+                      updated_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    description:
+                      type: string
+                    order:
+                      type: integer
+    delete:
+      summary: Delete a subject
+      tags:
+      - Subjects
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Subject deleted successfully
+        '404':
+          description: Subject not found
+  "/api/v1/users":
+    get:
+      summary: Get all users
+      tags:
+      - Users
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    username:
+                      type: string
+                    email:
+                      type: string
+                    email_verified:
+                      type: boolean
+                    created_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create or get user
+      tags:
+      - Users
+      parameters: []
+      responses:
+        '200':
+          description: User created or retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: John Doe
+                    email:
+                      type: string
+                      example: john@example.com
+                  required:
+                  - email
+  "/api/v1/users/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: string
+    get:
+      summary: Get user by ID
+      tags:
+      - Users
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+                  email:
+                    type: string
+                  email_verified:
+                    type: boolean
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/users/{id}/courses":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: string
+    get:
+      summary: Get user courses
+      tags:
+      - Users
+      responses:
+        '200':
+          description: User courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    title:
+                      type: string
+                    description:
+                      type: string
+                    language_code:
+                      type: string
+                    level:
+                      type: string
+                    status:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  "/api/v1/videos":
+    get:
+      summary: Get all videos
+      tags:
+      - Videos
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Videos retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    local_uri:
+                      type: string
+                    text:
+                      type: string
+                    avatar_info:
+                      type: object
+                    audio_info:
+                      type: object
+                    status:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date_time
+                    updated_at:
+                      type: string
+                      format: date_time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new video
+      tags:
+      - Videos
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: Video created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  video:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      local_uri:
+                        type: string
+                      text:
+                        type: string
+                      avatar_info:
+                        type: object
+                      audio_info:
+                        type: object
+                      status:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date_time
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                video:
+                  type: object
+                  properties:
+                    text:
+                      type: string
+                      example: Hello world
+                    video_uri:
+                      type: string
+                      example: https://example.com/video.mp4
+                    video_url:
+                      type: string
+                      example: https://example.com/video.mp4
+                    name:
+                      type: string
+                      example: Video Name
+                    translated_text:
+                      type: string
+                      example: Translated text
+                    voice_type:
+                      type: string
+                      example: male
+                    language_code:
+                      type: string
+                      example: en
+                    avatar_name:
+                      type: string
+                      example: avatar1
+                    metadata:
+                      type: object
+                  required:
+                  - text
+  "/api/v1/videos/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: Video ID
+      schema:
+        type: string
+    get:
+      summary: Get video by ID
+      tags:
+      - Videos
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Video retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  local_uri:
+                    type: string
+                  text:
+                    type: string
+                  avatar_info:
+                    type: object
+                  audio_info:
+                    type: object
+                  status:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date_time
+                  updated_at:
+                    type: string
+                    format: date_time
+        '404':
+          description: Video not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update a video
+      tags:
+      - Videos
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: Video updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  video:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      local_uri:
+                        type: string
+                      text:
+                        type: string
+                      avatar_info:
+                        type: object
+                      audio_info:
+                        type: object
+                      status:
+                        type: string
+                      updated_at:
+                        type: string
+                        format: date_time
+        '404':
+          description: Video not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                video:
+                  type: object
+                  properties:
+                    local_uri:
+                      type: string
+                    status:
+                      type: string
+                    avatar_info:
+                      type: object
+                    audio_info:
+                      type: object
+    delete:
+      summary: Delete a video
+      tags:
+      - Videos
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: Video deleted successfully
+        '404':
+          description: Video not found

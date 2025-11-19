@@ -20,7 +20,6 @@ export const useCourseStatistics = (courseId) => {
     const subjects = subjectsQuery.data || [];
     const recordings = recordingsQuery.data || [];
     const reports = reportsQuery.data || [];
-    const analyses = analysesQuery.data;
 
     // Calculate total recordings count from grouped structure
     const totalRecordings = Array.isArray(recordings) && recordings.length > 0
@@ -42,16 +41,24 @@ export const useCourseStatistics = (courseId) => {
         }, 0)
       : 0;
 
+    // Analysis count: Set to 1 when other stats are loaded, otherwise 0
+    // This avoids fetching analyses data just for the stat count
+    const otherStatsLoaded = !subjectsQuery.isLoading && 
+                             !recordingsQuery.isLoading && 
+                             !reportsQuery.isLoading &&
+                             (subjects.length > 0 || totalRecordings > 0 || totalReports > 0);
+    const analysesCount = otherStatsLoaded ? 1 : 0;
+
     const stats = {
       subjectsCount: subjects.length,
       recordingsCount: totalRecordings,
       reportsCount: totalReports,
-      analysesCount: analyses ? 1 : 0,
+      analysesCount: analysesCount,
       // Additional computed stats
       subjects: subjects,
       recordings: recordings,
       reports: reports,
-      analyses: analyses,
+      analyses: null, // Not fetched anymore
     };
 
     const duration = Date.now() - startTime;
@@ -66,18 +73,20 @@ export const useCourseStatistics = (courseId) => {
     subjectsQuery.data,
     recordingsQuery.data,
     reportsQuery.data,
-    analysesQuery.data,
+    subjectsQuery.isLoading,
+    recordingsQuery.isLoading,
+    reportsQuery.isLoading,
   ]);
 
   const loading = subjectsQuery.isLoading || 
                    recordingsQuery.isLoading || 
-                   reportsQuery.isLoading || 
-                   analysesQuery.isLoading;
+                   reportsQuery.isLoading;
+                   // analysesQuery.isLoading removed - query is disabled
 
   const error = subjectsQuery.error || 
                 recordingsQuery.error || 
-                reportsQuery.error || 
-                analysesQuery.error;
+                reportsQuery.error;
+                // analysesQuery.error removed - query is disabled
 
   return {
     statistics,
