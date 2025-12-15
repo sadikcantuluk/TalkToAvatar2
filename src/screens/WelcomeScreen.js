@@ -3,390 +3,276 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Dimensions,
   TouchableOpacity,
-  Animated,
+  FlatList,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, SIZES } from '../constants';
-import { Button } from '../components';
-import { useAuth } from '../context';
+import { COLORS } from '../constants';
 
 const { width, height } = Dimensions.get('window');
 
-const modes = [
+// Update COLORS for this specific screen to match requested Sualingo/Teal theme
+const THEME_COLORS = {
+  primary: '#2D7F83', // Teal-ish color from the reference description
+  primaryDark: '#236568',
+  background: '#FFFFFF',
+  text: '#1A202C',
+  textSecondary: '#718096',
+  white: '#FFFFFF',
+  dotInactive: '#E2E8F0',
+};
+
+const slides = [
   {
-    id: 1,
-    route: 'Dashboard',
-    icon: 'mic-outline',
-    gradient: ['#6366F1', '#8B5CF6'],
-    title: 'TTS Avatar',
-    description: 'Transform text into lifelike speech with AI-powered avatars that bring your words to life.',
-    features: ['Multiple Voice Options', 'Custom Avatars', 'High Quality Audio'],
-  },
-  {
-    id: 2,
-    route: 'AvatarToVideo',
-    icon: 'videocam-outline',
-    gradient: ['#EC4899', '#F43F5E'],
-    title: 'Avatar to Video',
-    description: 'Create stunning videos with realistic animated avatars using just your voice.',
-    features: ['Voice Recording', 'HD Video Export', 'Custom Animation'],
-  },
-  {
-    id: 3,
-    route: 'Sualingo',
-    icon: 'language-outline',
-    gradient: ['#10B981', '#06B6D4'],
+    id: '3',
     title: 'Sualingo',
     description: 'Master pronunciation and elevate your language skills with AI-powered feedback.',
-    features: ['6 Language Levels', 'Real-time Scoring', 'Practice Mode'],
+    icon: 'school', // changed for language learning context
+    color: '#10B981',
   },
   {
-    id: 4,
-    route: 'TravelAssistant',
-    icon: 'airplane-outline',
-    gradient: ['#F59E0B', '#EF4444'],
+    id: '4',
     title: 'Travel Assistant',
     description: 'Your AI travel companion for instant translations and local insights.',
-    features: ['Live Translation', 'Travel Tips', 'Multi-language'],
+    icon: 'airplane',
+    color: '#F59E0B',
+  },
+  {
+    id: '2',
+    title: 'Avatar to Video',
+    description: 'Create stunning videos with realistic animated avatars using just your voice.',
+    icon: 'videocam',
+    color: '#EC4899',
+  },
+  {
+    id: '1',
+    title: 'TTS Avatar',
+    description: 'Transform text into lifelike speech with AI-powered avatars that bring your words to life.',
+    icon: 'mic-circle',
+    color: '#6366F1',
   },
 ];
 
 const WelcomeScreen = ({ navigation }) => {
-  const { user } = useAuth();
-  const scrollViewRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slidesRef = useRef(null);
 
-  React.useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start();
-  }, []);
+  const viewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems && viewableItems.length > 0) {
+      setCurrentIndex(viewableItems[0].index);
+    }
+  }).current;
 
-  const handleScroll = (event) => {
-    const contentOffsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.round(contentOffsetX / width);
-    setCurrentIndex(index);
+  const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+
+  const scrollToNext = () => {
+    if (currentIndex < slides.length - 1) {
+      slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
+    } else {
+      navigation.replace('Login');
+    }
   };
 
-  const scrollToIndex = (index) => {
-    scrollViewRef.current?.scrollTo({
-      x: index * width,
-      animated: true,
-    });
+  const handleSkip = () => {
+    navigation.replace('Login');
+  };
+
+  const Slide = ({ item }) => {
+    return (
+      <View style={styles.slide}>
+        <View style={styles.illustrationContainer}>
+          <View style={[styles.iconCircle, { backgroundColor: item.color + '20' }]}>
+            <Ionicons name={item.icon} size={100} color={item.color} />
+          </View>
+        </View>
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.description}>{item.description}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const Footer = () => {
+    return (
+      <View style={styles.footer}>
+        {/* Paginator */}
+        <View style={styles.paginatorContainer}>
+          {slides.map((_, index) => {
+            const width = index === currentIndex ? 20 : 8;
+            const backgroundColor = index === currentIndex ? THEME_COLORS.primary : THEME_COLORS.dotInactive;
+            return (
+              <View
+                key={index}
+                style={[styles.dot, { width, backgroundColor }]}
+              />
+            );
+          })}
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.buttonContainer}>
+          {currentIndex === slides.length - 1 ? (
+            <TouchableOpacity style={styles.btn} onPress={scrollToNext}>
+              <Text style={styles.btnText}>Get Started</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.navButtons}>
+              <TouchableOpacity onPress={handleSkip} style={styles.skipBtn}>
+                <Text style={styles.skipText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.nextBtn} onPress={scrollToNext}>
+                <Ionicons name="arrow-forward" size={24} color={THEME_COLORS.white} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    );
   };
 
   return (
-    <View style={styles.container}>
-      {/* Animated Header */}
-      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
-        <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoIconContainer}>
-              <Ionicons name="mic" size={24} color={COLORS.white} />
-            </View>
-            <Text style={styles.logoText}>TalkToAvatar</Text>
-          </View>
-          <Text style={styles.headerSubtitle}>AI-Powered Avatar Experience</Text>
-        </View>
-      </Animated.View>
-
-      {/* Welcome User Message */}
-      <Animated.View style={[styles.welcomeSection, { opacity: fadeAnim }]}>
-        <Text style={styles.welcomeText}>Welcome back,</Text>
-        <Text style={styles.usernameText}>{user?.username || 'User'}!</Text>
-      </Animated.View>
-
-      {/* Main Content - Carousel */}
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={styles.scrollViewContent}
-        style={styles.carouselContainer}
-      >
-        {modes.map((mode, index) => (
-          <TouchableOpacity
-            key={mode.id}
-            style={styles.cardWrapper}
-            activeOpacity={0.95}
-            onPress={() => navigation.navigate(mode.route)}
-          >
-            <View style={styles.card}>
-              {/* Gradient Background */}
-              <LinearGradient
-                colors={mode.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradient}
-              >
-                <View style={styles.cardContent}>
-                  {/* Icon */}
-                  <View style={styles.iconContainer}>
-                    <Ionicons name={mode.icon} size={48} color={COLORS.white} />
-                  </View>
-
-                  {/* Title & Description */}
-                  <View style={styles.textContent}>
-                    <Text style={styles.cardTitle}>{mode.title}</Text>
-                    <Text style={styles.cardDescription}>{mode.description}</Text>
-                  </View>
-
-                  {/* Features */}
-                  <View style={styles.featuresContainer}>
-                    {mode.features.map((feature, idx) => (
-                      <View key={idx} style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={16} color="rgba(255,255,255,0.9)" />
-                        <Text style={styles.featureText}>{feature}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* CTA */}
-                  <View style={styles.ctaContainer}>
-                    <View style={styles.ctaButton}>
-                      <Text style={styles.ctaText}>Get Started</Text>
-                      <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-                    </View>
-                  </View>
-                </View>
-              </LinearGradient>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        {/* Page Indicators */}
-        <View style={styles.indicators}>
-          {modes.map((_, index) => (
-            <TouchableOpacity
-              key={index}
-              onPress={() => scrollToIndex(index)}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[
-                  styles.indicator,
-                  index === currentIndex ? styles.indicatorActive : styles.indicatorInactive,
-                ]}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Profile Button */}
-        <TouchableOpacity
-          style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Ionicons name="person-circle-outline" size={20} color={COLORS.gray[400]} />
-          <Text style={styles.profileText}>View Profile</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <View style={styles.content}>
+        <FlatList
+          data={slides}
+          renderItem={({ item }) => <Slide item={item} />}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          pagingEnabled
+          bounces={false}
+          keyExtractor={(item) => item.id}
+          onViewableItemsChanged={viewableItemsChanged}
+          viewabilityConfig={viewConfig}
+          ref={slidesRef}
+          scrollEventThrottle={32}
+        />
       </View>
-    </View>
+      <Footer />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: THEME_COLORS.background,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 24,
+  content: {
+    flex: 3,
   },
-  headerContent: {
+  slide: {
+    width,
     alignItems: 'center',
+    padding: 20,
+    justifyContent: 'center', // Center content vertically in the slide area
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  logoIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
+  illustrationContainer: {
+    flex: 0.6,
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    alignItems: 'center',
+    marginBottom: 40,
   },
-  logoText: {
+  iconCircle: {
+    width: width * 0.7,
+    height: width * 0.7,
+    borderRadius: (width * 0.7) / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textContainer: {
+    flex: 0.4,
+    width: '100%', // Ensure text takes full width of padding
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    color: THEME_COLORS.text,
+    marginBottom: 16,
+    textAlign: 'center',
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: COLORS.gray[400],
-    fontWeight: '500',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  carouselContainer: {
-    flex: 1,
-  },
-  scrollViewContent: {
-    alignItems: 'center',
-  },
-  cardWrapper: {
-    width: width,
-    paddingHorizontal: 24,
-  },
-  card: {
-    height: height * 0.58,
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 15,
-  },
-  cardGradient: {
-    flex: 1,
-    padding: 32,
-  },
-  cardContent: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'flex-start',
-  },
-  welcomeSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  welcomeText: {
-    fontSize: 24,
-    color: COLORS.gray[400],
-    fontWeight: '500',
-  },
-  usernameText: {
-    fontSize: 24,
-    color: COLORS.white,
-    fontWeight: 'bold',
-  },
-  textContent: {
-    marginTop: 20,
-  },
-  cardTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginBottom: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  cardDescription: {
+  description: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.95)',
+    fontWeight: '400',
+    color: THEME_COLORS.textSecondary,
+    textAlign: 'center',
     lineHeight: 24,
-    fontWeight: '500',
-  },
-  featuresContainer: {
-    gap: 10,
-    paddingVertical: 16,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  featureText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '600',
-  },
-  ctaContainer: {
-    alignItems: 'center',
-  },
-  ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-  },
-  ctaText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    letterSpacing: 0.5,
   },
   footer: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    gap: 20,
-    alignItems: 'center',
+    flex: 1, // Take up remaining space
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 40, // Add some bottom padding
   },
-  indicators: {
+  paginatorContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    height: 64,
     justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
   },
-  indicator: {
+  dot: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.gray[700],
+    marginHorizontal: 4,
   },
-  indicatorActive: {
-    width: 32,
-    backgroundColor: COLORS.primary,
+  buttonContainer: {
+    marginBottom: 20,
   },
-  indicatorInactive: {
-    width: 8,
-    backgroundColor: COLORS.gray[700],
-  },
-  profileButton: {
-    flexDirection: 'row',
+  btn: {
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: THEME_COLORS.primary,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    shadowColor: THEME_COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  profileText: {
-    fontSize: 14,
+  btnText: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    color: THEME_COLORS.white,
+  },
+  navButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  skipBtn: {
+    padding: 16,
+  },
+  skipText: {
+    color: THEME_COLORS.textSecondary,
+    fontSize: 16,
     fontWeight: '600',
-    color: COLORS.gray[400],
+  },
+  nextBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: THEME_COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: THEME_COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
 });
 

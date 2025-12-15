@@ -6,13 +6,13 @@ import { COLORS, SIZES } from '../constants';
 import { useNotifications } from '../context/NotificationContext';
 
 const modes = [
-  { id: 'tts', name: 'TTS Mode', icon: 'mic' },
+  { id: 'sualingo', name: 'Sualingo Mode', icon: 'language' },
   { id: 'video', name: 'Video Mode', icon: 'videocam' },
   { id: 'travel', name: 'Travel Assistant', icon: 'navigate' },
-  { id: 'sualingo', name: 'Sualingo Mode', icon: 'language' },
+  { id: 'tts', name: 'TTS Mode', icon: 'mic' },
 ];
 
-const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation, hideHeader = false }) => {
+const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation, hideHeader = false, showBackButton = false }) => {
   const [modeModalVisible, setModeModalVisible] = useState(false);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const swipeableRefs = useRef({});
@@ -22,7 +22,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
 
   const handleModeSelect = (mode) => {
     setModeModalVisible(false);
-    
+
     // Direct navigation based on mode (only if navigation is available)
     if (navigation) {
       if (mode.id === 'tts') {
@@ -35,7 +35,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
         navigation.navigate('Sualingo');
       }
     }
-    
+
     // Also call onModeChange if provided (for internal state updates)
     if (onModeChange) {
       onModeChange(mode.id);
@@ -49,10 +49,10 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
   const handleNotificationPress = (notification) => {
     // Mark as read
     markAsRead(notification.id);
-    
+
     // Close modal
     setNotificationModalVisible(false);
-    
+
     // Navigate based on notification type
     if (notification.type === 'video_ready' && notification.videoData) {
       navigation.navigate('VideoViewing', { video: notification.videoData });
@@ -63,7 +63,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
     const date = new Date(dateString);
     const now = new Date();
     const seconds = Math.floor((now - date) / 1000);
-    
+
     if (seconds < 60) return 'Just now';
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -74,39 +74,48 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
     <View style={styles.container}>
       {/* Fixed Header */}
       {!hideHeader && (
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.notificationButton}
-          onPress={handleNotifications}
-        >
-          <Ionicons name="notifications-outline" size={24} color={COLORS.textLight} />
-          {unreadCount > 0 && (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </Text>
-            </View>
+        <View style={styles.header}>
+          {showBackButton ? (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('Dashboard')}
+            >
+              <Ionicons name="arrow-back" size={24} color="#1F2937" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.notificationButton}
+              onPress={handleNotifications}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#1F2937" />
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.modeSelector}
-          onPress={() => setModeModalVisible(true)}
-        >
-          <View style={styles.modePill}>
-            <Ionicons name={currentModeData.icon} size={18} color={COLORS.primary} />
-            <Text style={styles.modeText}>{currentModeData.name}</Text>
-          </View>
-          <Ionicons name="chevron-down" size={20} color={COLORS.textLight} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Ionicons name="person-circle-outline" size={24} color={COLORS.textLight} />
-        </TouchableOpacity>
-      </View>
+
+          <TouchableOpacity
+            style={styles.modeSelector}
+            onPress={() => setModeModalVisible(true)}
+          >
+            <View style={styles.modePill}>
+              <Ionicons name={currentModeData.icon} size={18} color={COLORS.primary} />
+              <Text style={styles.modeText}>{currentModeData.name}</Text>
+            </View>
+            <Ionicons name="chevron-down" size={20} color={COLORS.gray[600]} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Ionicons name="person-circle-outline" size={28} color="#2D7F83" />
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Content */}
@@ -124,7 +133,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Mode</Text>
               <TouchableOpacity onPress={() => setModeModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textLight} />
+                <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -139,10 +148,10 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
                   onPress={() => handleModeSelect(item)}
                 >
                   <View style={styles.modeItemIconContainer}>
-                    <Ionicons 
-                      name={item.icon} 
-                      size={24} 
-                      color={currentMode === item.id ? COLORS.primary : COLORS.textLight} 
+                    <Ionicons
+                      name={item.icon}
+                      size={24}
+                      color={currentMode === item.id ? COLORS.primary : '#6B7280'}
                     />
                   </View>
                   <Text style={[
@@ -176,7 +185,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
                 {notifications.length > 0 && (
                   <>
                     {unreadCount > 0 && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={markAllAsRead}
                         style={styles.markAllButton}
                       >
@@ -184,7 +193,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
                         <Text style={styles.markAllText}>Mark all</Text>
                       </TouchableOpacity>
                     )}
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={async () => {
                         if (notifications.length > 0) {
                           await clearAll();
@@ -202,7 +211,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
                 </TouchableOpacity>
               </View>
             </View>
-            
+
             {notifications.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Ionicons name="notifications-off-outline" size={64} color={COLORS.gray[600]} />
@@ -256,10 +265,10 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
                         styles.notificationIcon,
                         !notification.read && styles.notificationIconUnread,
                       ]}>
-                        <Ionicons 
-                          name={notification.type === 'video_ready' ? 'videocam' : 'information-circle'} 
-                          size={24} 
-                          color={!notification.read ? COLORS.primary : COLORS.gray[500]} 
+                        <Ionicons
+                          name={notification.type === 'video_ready' ? 'videocam' : 'information-circle'}
+                          size={24}
+                          color={!notification.read ? COLORS.primary : COLORS.gray[500]}
                         />
                       </View>
                       <View style={styles.notificationContent}>
@@ -297,7 +306,7 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: '#F9FAFB', // Light Background
   },
   header: {
     flexDirection: 'row',
@@ -306,9 +315,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingTop: 48,
     paddingBottom: 12,
-    backgroundColor: 'rgba(16, 25, 34, 0.95)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148, 163, 184, 0.1)',
+    backgroundColor: '#F9FAFB', // Match Dashboard Background
+    borderBottomWidth: 0,
   },
   notificationButton: {
     width: 40,
@@ -316,7 +324,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 20,
-    position: 'relative',
+    // Removed transparent background to fix touch artifact issues
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
   },
   notificationBadge: {
     position: 'absolute',
@@ -325,34 +340,41 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#F9FAFB',
   },
   notificationBadgeText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: '#FFFFFF',
   },
   modeSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   modePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
-    borderRadius: 20,
+    gap: 6,
   },
   modeText: {
     fontSize: SIZES.body2,
     fontWeight: '600',
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   profileButton: {
     width: 40,
@@ -360,33 +382,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 20,
+    backgroundColor: 'transparent',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
-    overflow: 'hidden',
+    // overflow: 'hidden', // Removing overflow hidden to allow shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[800],
+    borderBottomWidth: 0,
+    // borderBottomColor removed
   },
   modalTitle: {
     fontSize: SIZES.h3,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   modeItem: {
     flexDirection: 'row',
@@ -401,14 +429,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modeItemText: {
     flex: 1,
     fontSize: SIZES.body1,
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   modeItemTextSelected: {
     fontWeight: '600',

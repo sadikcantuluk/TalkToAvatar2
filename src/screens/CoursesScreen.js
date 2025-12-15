@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCourses, useCreateCourse, useDeleteCourse } from '../hooks/useCourseQueries';
@@ -54,7 +55,7 @@ const CoursesScreen = ({ navigation }) => {
   const deleteCourseMutation = useDeleteCourse();
   const { token } = useAuth();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  
+
   // Sort courses by created_at - newest at the end
   const courses = useMemo(() => {
     if (!Array.isArray(coursesData) || coursesData.length === 0) {
@@ -67,14 +68,14 @@ const CoursesScreen = ({ navigation }) => {
       return dateA - dateB;
     });
   }, [coursesData]);
-  
+
   // Mark initial load as complete when loading is done
   useEffect(() => {
     if (!loading) {
       setIsInitialLoad(false);
     }
   }, [loading]);
-  
+
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [courseTitle, setCourseTitle] = useState('');
@@ -84,7 +85,7 @@ const CoursesScreen = ({ navigation }) => {
   const [isCreatingLocal, setIsCreatingLocal] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState(null);
-  
+
   // Validation errors
   const [errors, setErrors] = useState({
     title: '',
@@ -197,7 +198,7 @@ const CoursesScreen = ({ navigation }) => {
       console.log('🔑 [DEBUG] Token:', token.substring(0, 20) + '...');
 
       await createCourseMutation.mutateAsync(courseData);
-      
+
       console.log('✅ [SUCCESS] Course created successfully');
 
       handleCloseModal();
@@ -206,10 +207,10 @@ const CoursesScreen = ({ navigation }) => {
       console.error('❌ [ERROR] Error object:', err);
       console.error('❌ [ERROR] Error message:', err.message);
       console.error('❌ [ERROR] Error stack:', err.stack);
-      
+
       const errorMessage = err.message || err.error || JSON.stringify(err);
       console.error('❌ [ERROR] Full error:', errorMessage);
-      
+
       Alert.alert(
         'Error',
         `Failed to create course: ${errorMessage}`,
@@ -227,7 +228,7 @@ const CoursesScreen = ({ navigation }) => {
     console.log('🎯 [DEBUG] handleDeleteCourse called');
     console.log('📊 [DEBUG] Course ID:', courseId);
     console.log('📊 [DEBUG] Course Title:', courseTitle);
-    
+
     setCourseToDelete({ id: courseId, title: courseTitle });
     setDeleteConfirmVisible(true);
   };
@@ -235,19 +236,19 @@ const CoursesScreen = ({ navigation }) => {
   const confirmDeleteCourse = () => {
     if (!courseToDelete) return;
 
-      console.log('🔄 [DEBUG] Starting course deletion...');
-    
+    console.log('🔄 [DEBUG] Starting course deletion...');
+
     // Close dialog immediately (optimistic update)
-      setDeleteConfirmVisible(false);
+    setDeleteConfirmVisible(false);
     const courseToDeleteId = courseToDelete.id;
-      setCourseToDelete(null);
-    
+    setCourseToDelete(null);
+
     // Delete course (optimistic update handled by React Query)
     // Backend deletion happens in background
     deleteCourseMutation.mutate(courseToDeleteId, {
       onError: (err) => {
-      console.error('❌ [ERROR] Course deletion failed:', err);
-      Alert.alert('Error', err.message || 'Failed to delete course');
+        console.error('❌ [ERROR] Course deletion failed:', err);
+        Alert.alert('Error', err.message || 'Failed to delete course');
       },
     });
   };
@@ -313,26 +314,26 @@ const CoursesScreen = ({ navigation }) => {
     const levelIcon = item.level ? getLevelIcon(item.level) : 'school-outline';
 
     return (
-    <TouchableOpacity
-      style={styles.courseCard}
-      onPress={() => handleCoursePress(item)}
-      activeOpacity={0.7}
-    >
+      <TouchableOpacity
+        style={styles.courseCard}
+        onPress={() => handleCoursePress(item)}
+        activeOpacity={0.7}
+      >
         {/* Card Header with Icon */}
         <View style={styles.courseCardHeader}>
           <View style={[styles.courseIconContainer, { backgroundColor: levelColor + '20' }]}>
             <Ionicons name={levelIcon} size={28} color={levelColor} />
-        </View>
-        <TouchableOpacity
+          </View>
+          <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
               handleDeleteCourse(item.id, item.title);
             }}
-          style={styles.deleteButton}
-        >
-          <Ionicons name="trash-outline" size={20} color={COLORS.error || '#ef4444'} />
-        </TouchableOpacity>
-      </View>
+            style={styles.deleteButton}
+          >
+            <Ionicons name="trash-outline" size={20} color={COLORS.error || '#ef4444'} />
+          </TouchableOpacity>
+        </View>
 
         {/* Course Info */}
         <View style={styles.courseInfo}>
@@ -345,30 +346,30 @@ const CoursesScreen = ({ navigation }) => {
         </View>
 
         {/* Course Meta Badges */}
-      <View style={styles.courseMeta}>
-        {item.level && (
-            <View style={[styles.metaBadge, styles.levelBadge, { backgroundColor: levelColor + '30', borderColor: levelColor + '50' }]}>
-              <Ionicons name="school-outline" size={14} color={levelColor} />
-              <Text style={[styles.metaText, { color: levelColor }]}>{item.level}</Text>
-          </View>
-        )}
-        {item.language_code && (
+        <View style={styles.courseMeta}>
+          {item.level && (
+            <View style={[styles.metaBadge, styles.levelBadge]}>
+              <Ionicons name="school-outline" size={14} color="#4F46E5" />
+              <Text style={[styles.metaText, { color: '#4F46E5' }]}>{item.level}</Text>
+            </View>
+          )}
+          {item.language_code && (
             <View style={[styles.metaBadge, styles.languageBadge]}>
               <Text style={styles.languageFlag}>{languageFlag}</Text>
-            <Text style={styles.metaText}>{item.language_code.toUpperCase()}</Text>
-          </View>
-        )}
-        <View style={[styles.metaBadge, styles.statusBadge]}>
-            <Ionicons 
-              name={item.status === 'active' ? 'checkmark-circle-outline' : 'time-outline'} 
-              size={14} 
-              color="#f59e0b" 
+              <Text style={[styles.metaText, { color: '#059669' }]}>{item.language_code.toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={[styles.metaBadge, styles.statusBadge]}>
+            <Ionicons
+              name={item.status === 'active' ? 'checkmark-circle-outline' : 'time-outline'}
+              size={14}
+              color="#D97706"
             />
-          <Text style={styles.metaText}>{item.status || 'active'}</Text>
+            <Text style={[styles.metaText, { color: '#D97706' }]}>{item.status || 'active'}</Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
   };
 
   const renderSkeleton = () => (
@@ -390,15 +391,15 @@ const CoursesScreen = ({ navigation }) => {
           <Ionicons name="alert-circle-outline" size={48} color={COLORS.error || '#ef4444'} />
           <Text style={styles.errorText}>{errorMessage}</Text>
           {!errorMessage.includes('Session expired') && (
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={async () => {
-              console.log('🔄 [DEBUG] Retry button pressed');
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={async () => {
+                console.log('🔄 [DEBUG] Retry button pressed');
                 await refetch();
-            }}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
           )}
           <TouchableOpacity
             style={[styles.retryButton, { marginTop: 10, backgroundColor: COLORS.gray[600] }]}
@@ -411,66 +412,50 @@ const CoursesScreen = ({ navigation }) => {
     );
   }
 
-  const isFormValid = courseTitle.trim().length >= VALIDATION.TITLE.MIN_LENGTH && 
-                      courseTitle.trim().length <= VALIDATION.TITLE.MAX_LENGTH &&
-                      courseDescription.length <= VALIDATION.DESCRIPTION.MAX_LENGTH &&
-                      courseLanguage &&
-                      !errors.title &&
-                      !errors.description &&
-                      !errors.language;
+  const isFormValid = courseTitle.trim().length >= VALIDATION.TITLE.MIN_LENGTH &&
+    courseTitle.trim().length <= VALIDATION.TITLE.MAX_LENGTH &&
+    courseDescription.length <= VALIDATION.DESCRIPTION.MAX_LENGTH &&
+    courseLanguage &&
+    !errors.title &&
+    !errors.description &&
+    !errors.language;
 
   return (
     <DashboardLayout navigation={navigation} currentMode="sualingo">
       <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerTitleContainer}>
-              <View style={styles.headerIconContainer}>
-                <Ionicons name="book" size={24} color={COLORS.primary} />
-              </View>
-              <View>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>My Courses</Text>
-                <Text style={styles.headerSubtitle}>
-                  {courses.length} {courses.length === 1 ? 'course' : 'courses'}
-                </Text>
-              </View>
-            </View>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={handleCreateCourse}
-            disabled={isCreating}
+            onPress={() => navigation.navigate('CourseSetup')}
           >
-            {isCreating ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-                <>
-                  <Ionicons name="add" size={20} color={COLORS.white} />
-                  <Text style={styles.addButtonText}>New</Text>
-                </>
-            )}
+            <Ionicons name="add" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          </View>
         </View>
 
         {loading || isInitialLoad ? (
           renderSkeleton()
         ) : (courses || []).length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="book-outline" size={64} color={COLORS.textLight} />
+            <Ionicons name="school-outline" size={80} color="#D1D5DB" />
             <Text style={styles.emptyText}>No courses yet</Text>
             <Text style={styles.emptySubtext}>
-              Create your first course to get started
+              Start your language journey by creating a new course.
             </Text>
             <TouchableOpacity
               style={styles.createButton}
-              onPress={handleCreateCourse}
-              disabled={isCreating}
+              onPress={() => navigation.navigate('CourseSetup')}
             >
-              {isCreating ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <Text style={styles.createButtonText}>Create Course</Text>
-              )}
+              <Text style={styles.createButtonText}>Create New Course</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -664,139 +649,168 @@ const CoursesScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: '#F9FAFB',
   },
   header: {
-    paddingHorizontal: SIZES.padding,
-    paddingTop: SIZES.padding,
-    paddingBottom: SIZES.base,
-    backgroundColor: 'transparent',
-  },
-  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  headerTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  headerIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    marginTop: 0,
+    backgroundColor: '#F9FAFB', // Reverted to Light Background
   },
   headerTitle: {
-    fontSize: SIZES.h1,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: COLORS.textLight,
-    marginBottom: 2,
+    color: '#1F2937', // Dark Text
   },
-  headerSubtitle: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[400],
-    fontWeight: '500',
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
   },
   addButton: {
-    flexDirection: 'row',
+    backgroundColor: '#2D7F83', // Teal Button
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
+    justifyContent: 'center',
+    shadowColor: '#2D7F83',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 4,
   },
-  addButtonText: {
-    color: COLORS.white,
-    fontSize: SIZES.body2,
-    fontWeight: '600',
-  },
   listContent: {
-    padding: SIZES.padding,
+    padding: 24,
+    paddingTop: 8,
   },
   courseCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: SIZES.padding,
-    marginBottom: SIZES.padding,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   courseCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SIZES.base,
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   courseIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  courseInfo: {
-    marginBottom: SIZES.base,
-  },
-  courseTitle: {
-    fontSize: SIZES.h3,
-    fontWeight: 'bold',
-    color: COLORS.textLight,
-    marginBottom: 6,
-    lineHeight: 24,
-  },
-  courseDescription: {
-    fontSize: SIZES.body2,
-    color: COLORS.gray[400],
-    lineHeight: 20,
+    backgroundColor: '#F3F4F6', // Light gray bg for icon
   },
   deleteButton: {
     padding: 8,
+    backgroundColor: '#FEE2E2',
     borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  courseInfo: {
+    marginBottom: 16,
+  },
+  courseTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 6,
+  },
+  courseDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
   },
   courseMeta: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
   },
   metaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   levelBadge: {
-    // Dynamic color applied inline
+    backgroundColor: '#E0E7FF', // Light Indigo
+    borderColor: '#C7D2FE',
+    borderWidth: 1,
   },
   languageBadge: {
-    backgroundColor: '#10b981' + '20',
-    borderColor: '#10b981' + '40',
+    backgroundColor: '#ECFDF5', // Light Emerald
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  statusBadge: {
+    backgroundColor: '#FFFBEB', // Light Amber
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  metaText: {
+    fontSize: 12,
+    fontWeight: '800', // Extra Bold
+    color: '#111827', // Almost Black for maximum contrast
+  },
+  languageFlag: {
+    fontSize: 14,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 32,
+  },
+  createButton: {
+    backgroundColor: '#2D7F83',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: '#2D7F83',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  createButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Skeleton styles
+  skeletonContainer: {
+    padding: 24,
+  },
+  skeletonItem: {
+    height: 140,
+    borderRadius: 20,
+    marginBottom: 16,
   },
   statusBadge: {
     backgroundColor: '#f59e0b' + '20',

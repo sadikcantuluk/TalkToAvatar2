@@ -3,12 +3,12 @@ import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../constants';
 
-const Toast = ({ 
-  visible, 
-  message, 
+const Toast = ({
+  visible,
+  message,
   type = 'info', // 'success', 'error', 'warning', 'info'
   duration = 3000,
-  onHide 
+  onHide
 }) => {
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -87,11 +87,20 @@ const Toast = ({
         },
       ]}
     >
-      <View style={[styles.toast, { borderLeftColor: getColor() }]}>
-        <Ionicons name={getIconName()} size={24} color={getColor()} />
-        <Text style={styles.message}>{message}</Text>
+      <View style={[styles.toast, { backgroundColor: '#333333' }]}>
+        <View style={[styles.iconContainer, { backgroundColor: type === 'error' ? '#EF4444' : '#10B981' }]}>
+          <Text style={styles.iconText}>{type === 'error' ? '✕' : '✓'}</Text>
+        </View>
+
+        <View style={styles.contentContainer}>
+          <Text style={styles.title}>
+            {type === 'error' ? 'Notification: ' : 'Success: '}
+            <Text style={styles.messageText}>{message}</Text>
+          </Text>
+        </View>
+
         <TouchableOpacity onPress={hideToast} style={styles.closeButton}>
-          <Ionicons name="close" size={20} color={COLORS.gray[400]} />
+          <Ionicons name="close-circle" size={20} color="#666" />
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -106,30 +115,50 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 9999,
     elevation: 9999,
+    alignItems: 'center',
   },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.gray[900],
-    borderRadius: 12,
-    padding: 16,
-    paddingRight: 12,
-    borderLeftWidth: 4,
+    borderRadius: 8,
+    padding: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    gap: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    width: '100%',
+    maxWidth: 400,
   },
-  message: {
+  iconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  iconText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  contentContainer: {
     flex: 1,
-    fontSize: SIZES.body2,
-    color: COLORS.textLight,
-    lineHeight: 20,
+  },
+  title: {
+    color: '#F0F0F0',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  messageText: {
+    color: '#F0F0F0',
+    fontSize: 14,
+    fontWeight: '400',
   },
   closeButton: {
     padding: 4,
+    marginLeft: 8,
   },
 });
 

@@ -35,27 +35,27 @@ const TravelAssistantScreen = ({ navigation }) => {
   const [counterpartLanguage, setCounterpartLanguage] = useState('es');
   const [userVoice, setUserVoice] = useState('nova');
   const [counterpartVoice, setCounterpartVoice] = useState('onyx');
-  
+
   // History management
   const [userHistory, setUserHistory] = useState([]);
   const [counterpartHistory, setCounterpartHistory] = useState([]);
   const [userHistoryIndex, setUserHistoryIndex] = useState(-1);
   const [counterpartHistoryIndex, setCounterpartHistoryIndex] = useState(-1);
-  
+
   // Recording states
   const [isUserRecording, setIsUserRecording] = useState(false);
   const [isCounterpartRecording, setIsCounterpartRecording] = useState(false);
   const userRecordingRef = useRef(null);
   const counterpartRecordingRef = useRef(null);
-  
+
   // Speaking states
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [isCounterpartSpeaking, setIsCounterpartSpeaking] = useState(false);
-  
+
   // Speech generation loading states
   const [isUserGeneratingSpeech, setIsUserGeneratingSpeech] = useState(false);
   const [isCounterpartGeneratingSpeech, setIsCounterpartGeneratingSpeech] = useState(false);
-  
+
   // Sending states
   const [isSending, setIsSending] = useState(false);
 
@@ -73,13 +73,13 @@ const TravelAssistantScreen = ({ navigation }) => {
       console.log('=== Loading Travel Assistant History ===');
       const userHist = await AsyncStorage.getItem(USER_HISTORY_KEY);
       const counterpartHist = await AsyncStorage.getItem(COUNTERPART_HISTORY_KEY);
-      
+
       if (userHist) {
         const parsed = JSON.parse(userHist);
         setUserHistory(parsed);
         console.log('Loaded user history items:', parsed.length);
       }
-      
+
       if (counterpartHist) {
         const parsed = JSON.parse(counterpartHist);
         setCounterpartHistory(parsed);
@@ -95,11 +95,11 @@ const TravelAssistantScreen = ({ navigation }) => {
       const key = isUser ? USER_HISTORY_KEY : COUNTERPART_HISTORY_KEY;
       const currentHistory = isUser ? userHistory : counterpartHistory;
       const setHistory = isUser ? setUserHistory : setCounterpartHistory;
-      
+
       const newHistory = [text, ...currentHistory.filter(t => t !== text)].slice(0, 20);
       setHistory(newHistory);
       await AsyncStorage.setItem(key, JSON.stringify(newHistory));
-      
+
       console.log(`Saved to ${isUser ? 'user' : 'counterpart'} history. Total: ${newHistory.length}`);
     } catch (error) {
       console.error('Error saving history:', error);
@@ -126,16 +126,16 @@ const TravelAssistantScreen = ({ navigation }) => {
       if (isRecording) {
         console.log(`=== ${side} Stopping Recording ===`);
         setRecording(false);
-        
+
         if (recordingRef.current) {
           const result = await stopRecording(recordingRef.current);
-          
+
           if (result.success) {
             console.log(`${side} transcribing audio...`);
             // Use appropriate language for transcription
             const language = isUser ? userLanguage : counterpartLanguage;
             const transcription = await transcribeAudio(result.uri, language);
-            
+
             if (transcription.success) {
               console.log(`✅ ${side} transcription successful:`, transcription.text);
               setText(transcription.text);
@@ -144,13 +144,13 @@ const TravelAssistantScreen = ({ navigation }) => {
               Alert.alert('Error', 'Failed to transcribe audio');
             }
           }
-          
+
           recordingRef.current = null;
         }
       } else {
         console.log(`=== ${side} Starting Recording ===`);
         const result = await startRecording();
-        
+
         if (result.success) {
           recordingRef.current = result.recording;
           setRecording(true);
@@ -184,18 +184,18 @@ const TravelAssistantScreen = ({ navigation }) => {
       console.log('Source language:', sourceLang);
       console.log('Target language:', targetLang);
       console.log('Text:', text);
-      
+
       setIsSending(true);
-      
+
       // Save to history
       await saveToHistory(text, isUser);
-      
+
       // Translate if languages are different
       let translatedText = text;
       if (sourceLang !== targetLang) {
         console.log('Translating message...');
         const result = await translateText(text, targetLang);
-        
+
         if (result.success) {
           translatedText = result.translatedText;
           console.log('✅ Translation successful:', translatedText);
@@ -205,11 +205,11 @@ const TravelAssistantScreen = ({ navigation }) => {
       } else {
         console.log('Same language, no translation needed');
       }
-      
+
       // Set translated text to other side
       setText(translatedText);
       await saveToHistory(translatedText, !isUser);
-      
+
       console.log('✅ Message sent successfully');
     } catch (error) {
       console.error(`${side} send error:`, error);
@@ -252,18 +252,18 @@ const TravelAssistantScreen = ({ navigation }) => {
         console.log('Selected Language (for reference):', language);
         console.log('Selected Voice:', voice);
         console.log('✅ Using generateSpeechOnly - NO translation will occur');
-        
+
         // Set loading state before generating speech
         setGenerating(true);
-        
+
         try {
           // Generate speech ONLY - text is already in correct language
           // This function will NOT translate, just convert text to speech
           const result = await generateSpeechOnly(text, voice);
-          
+
           // Reset loading state
           setGenerating(false);
-          
+
           if (result.success) {
             setSpeaking(true);
             await playAudio(result.audioUri, () => {
@@ -298,7 +298,7 @@ const TravelAssistantScreen = ({ navigation }) => {
     if (history.length === 0) return;
 
     let newIndex = currentIndex;
-    
+
     if (direction === 'prev') {
       newIndex = currentIndex < history.length - 1 ? currentIndex + 1 : currentIndex;
     } else {
@@ -328,206 +328,213 @@ const TravelAssistantScreen = ({ navigation }) => {
   };
 
   return (
-    <DashboardLayout 
-      currentMode="travel" 
+    <DashboardLayout
+      currentMode="travel"
       onModeChange={handleModeChange}
       navigation={navigation}
+      showBackButton={true}
     >
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-        {/* User Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>You</Text>
-            <View style={styles.headerActions}>
-              <VoiceSelector
-                selectedVoice={userVoice}
-                onVoiceChange={setUserVoice}
-                style={styles.voiceSelector}
-              />
-              <LanguageSelector
-                selectedLanguage={userLanguage}
-                onLanguageChange={setUserLanguage}
-                style={styles.languageSelector}
-              />
+          {/* User Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>You</Text>
+              <View style={styles.headerActions}>
+                <VoiceSelector
+                  selectedVoice={userVoice}
+                  onVoiceChange={setUserVoice}
+                  style={styles.voiceSelector}
+                  textColor="#1F2937"
+                  labelColor="#6B7280" // Dark Gray for label
+                />
+                <LanguageSelector
+                  selectedLanguage={userLanguage}
+                  onLanguageChange={setUserLanguage}
+                  style={styles.languageSelector}
+                  textColor="#1F2937"
+                />
+              </View>
             </View>
-          </View>
 
-          <View style={styles.textAreaWrapper}>
-            <TextInput
-              style={styles.textArea}
-              placeholder={`Type or tap the mic to speak... (${userText.length}/500)`}
-              placeholderTextColor={COLORS.gray[400]}
-              value={userText}
-              onChangeText={setUserText}
-              multiline
-              maxLength={500}
-            />
-            {userText.length > 0 && (
+            <View style={styles.textAreaWrapper}>
+              <TextInput
+                style={styles.textArea}
+                placeholder={`Type or tap the mic to speak... (${userText.length}/500)`}
+                placeholderTextColor={COLORS.gray[400]}
+                value={userText}
+                onChangeText={setUserText}
+                multiline
+                maxLength={500}
+              />
+              {userText.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearButtonInside}
+                  onPress={() => handleClear(true)}
+                >
+                  <Ionicons name="close-circle" size={24} color={COLORS.gray[400]} />
+                </TouchableOpacity>
+              )}
+              <View style={styles.arrowButtons}>
+                <TouchableOpacity
+                  onPress={() => handleHistoryNavigation(true, 'prev')}
+                  disabled={userHistory.length === 0 || userHistoryIndex >= userHistory.length - 1}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={24}
+                    color={userHistory.length === 0 || userHistoryIndex >= userHistory.length - 1 ? COLORS.gray[600] : COLORS.gray[400]}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleHistoryNavigation(true, 'next')}
+                  disabled={userHistory.length === 0 || userHistoryIndex <= 0}
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={24}
+                    color={userHistory.length === 0 || userHistoryIndex <= 0 ? COLORS.gray[600] : COLORS.gray[400]}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.actionButtons}>
               <TouchableOpacity
-                style={styles.clearButtonInside}
-                onPress={() => handleClear(true)}
+                style={[styles.micButton, isUserRecording && styles.micButtonActive]}
+                onPress={() => handleMicPress(true)}
               >
-                <Ionicons name="close-circle" size={24} color={COLORS.gray[400]} />
-              </TouchableOpacity>
-            )}
-            <View style={styles.arrowButtons}>
-              <TouchableOpacity 
-                onPress={() => handleHistoryNavigation(true, 'prev')}
-                disabled={userHistory.length === 0 || userHistoryIndex >= userHistory.length - 1}
-              >
-                <Ionicons 
-                  name="chevron-back" 
-                  size={24} 
-                  color={userHistory.length === 0 || userHistoryIndex >= userHistory.length - 1 ? COLORS.gray[600] : COLORS.gray[400]} 
+                <Ionicons
+                  name={isUserRecording ? "stop-circle" : "mic"}
+                  size={28}
+                  color={isUserRecording ? "#ef4444" : COLORS.primary}
                 />
               </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => handleHistoryNavigation(true, 'next')}
-                disabled={userHistory.length === 0 || userHistoryIndex <= 0}
-              >
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={24} 
-                  color={userHistory.length === 0 || userHistoryIndex <= 0 ? COLORS.gray[600] : COLORS.gray[400]} 
+              <View style={styles.buttonRow}>
+                <Button
+                  title={isUserSpeaking ? "Stop" : "Speak"}
+                  variant="outline"
+                  style={styles.smallButton}
+                  onPress={() => handleSpeak(true)}
+                  disabled={!userText.trim() || isUserGeneratingSpeech}
+                  loading={isUserGeneratingSpeech}
                 />
-              </TouchableOpacity>
+                <Button
+                  title={isSending ? "Sending..." : "Send"}
+                  variant="primary"
+                  style={styles.smallButton}
+                  onPress={() => handleSend(true)}
+                  disabled={!userText.trim() || isSending}
+                />
+              </View>
             </View>
           </View>
 
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={[styles.micButton, isUserRecording && styles.micButtonActive]}
-              onPress={() => handleMicPress(true)}
-            >
-              <Ionicons 
-                name={isUserRecording ? "stop-circle" : "mic"} 
-                size={28} 
-                color={isUserRecording ? "#ef4444" : COLORS.primary} 
-              />
-            </TouchableOpacity>
-            <View style={styles.buttonRow}>
-              <Button 
-                title={isUserSpeaking ? "Stop" : "Speak"} 
-                variant="outline" 
-                style={styles.smallButton}
-                onPress={() => handleSpeak(true)}
-                disabled={!userText.trim() || isUserGeneratingSpeech}
-                loading={isUserGeneratingSpeech}
-              />
-              <Button 
-                title={isSending ? "Sending..." : "Send"} 
-                variant="primary" 
-                style={styles.smallButton}
-                onPress={() => handleSend(true)}
-                disabled={!userText.trim() || isSending}
-              />
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Other Person Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Other</Text>
+              <View style={styles.headerActions}>
+                <VoiceSelector
+                  selectedVoice={counterpartVoice}
+                  onVoiceChange={setCounterpartVoice}
+                  style={styles.voiceSelector}
+                  textColor="#1F2937"
+                  labelColor="#6B7280"
+                />
+                <LanguageSelector
+                  selectedLanguage={counterpartLanguage}
+                  onLanguageChange={setCounterpartLanguage}
+                  style={styles.languageSelector}
+                  textColor="#1F2937"
+                />
+              </View>
             </View>
-          </View>
-        </View>
 
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Other Person Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Other</Text>
-            <View style={styles.headerActions}>
-              <VoiceSelector
-                selectedVoice={counterpartVoice}
-                onVoiceChange={setCounterpartVoice}
-                style={styles.voiceSelector}
+            <View style={styles.textAreaWrapper}>
+              <TextInput
+                style={styles.textArea}
+                placeholder={`Type or tap the mic to speak... (${counterpartText.length}/500)`}
+                placeholderTextColor={COLORS.gray[400]}
+                value={counterpartText}
+                onChangeText={setCounterpartText}
+                multiline
+                maxLength={500}
               />
-              <LanguageSelector
-                selectedLanguage={counterpartLanguage}
-                onLanguageChange={setCounterpartLanguage}
-                style={styles.languageSelector}
-              />
+              {counterpartText.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearButtonInside}
+                  onPress={() => handleClear(false)}
+                >
+                  <Ionicons name="close-circle" size={24} color={COLORS.gray[400]} />
+                </TouchableOpacity>
+              )}
+              <View style={styles.arrowButtons}>
+                <TouchableOpacity
+                  onPress={() => handleHistoryNavigation(false, 'prev')}
+                  disabled={counterpartHistory.length === 0 || counterpartHistoryIndex >= counterpartHistory.length - 1}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={24}
+                    color={counterpartHistory.length === 0 || counterpartHistoryIndex >= counterpartHistory.length - 1 ? COLORS.gray[600] : COLORS.gray[400]}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleHistoryNavigation(false, 'next')}
+                  disabled={counterpartHistory.length === 0 || counterpartHistoryIndex <= 0}
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={24}
+                    color={counterpartHistory.length === 0 || counterpartHistoryIndex <= 0 ? COLORS.gray[600] : COLORS.gray[400]}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.textAreaWrapper}>
-            <TextInput
-              style={styles.textArea}
-              placeholder={`Type or tap the mic to speak... (${counterpartText.length}/500)`}
-              placeholderTextColor={COLORS.gray[400]}
-              value={counterpartText}
-              onChangeText={setCounterpartText}
-              multiline
-              maxLength={500}
-            />
-            {counterpartText.length > 0 && (
+            <View style={styles.actionButtons}>
               <TouchableOpacity
-                style={styles.clearButtonInside}
-                onPress={() => handleClear(false)}
+                style={[styles.micButton, isCounterpartRecording && styles.micButtonActive]}
+                onPress={() => handleMicPress(false)}
               >
-                <Ionicons name="close-circle" size={24} color={COLORS.gray[400]} />
-              </TouchableOpacity>
-            )}
-            <View style={styles.arrowButtons}>
-              <TouchableOpacity 
-                onPress={() => handleHistoryNavigation(false, 'prev')}
-                disabled={counterpartHistory.length === 0 || counterpartHistoryIndex >= counterpartHistory.length - 1}
-              >
-                <Ionicons 
-                  name="chevron-back" 
-                  size={24} 
-                  color={counterpartHistory.length === 0 || counterpartHistoryIndex >= counterpartHistory.length - 1 ? COLORS.gray[600] : COLORS.gray[400]} 
+                <Ionicons
+                  name={isCounterpartRecording ? "stop-circle" : "mic"}
+                  size={28}
+                  color={isCounterpartRecording ? "#ef4444" : COLORS.primary}
                 />
               </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => handleHistoryNavigation(false, 'next')}
-                disabled={counterpartHistory.length === 0 || counterpartHistoryIndex <= 0}
-              >
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={24} 
-                  color={counterpartHistory.length === 0 || counterpartHistoryIndex <= 0 ? COLORS.gray[600] : COLORS.gray[400]} 
+              <View style={styles.buttonRow}>
+                <Button
+                  title={isCounterpartSpeaking ? "Stop" : "Speak"}
+                  variant="outline"
+                  style={styles.smallButton}
+                  onPress={() => handleSpeak(false)}
+                  disabled={!counterpartText.trim() || isCounterpartGeneratingSpeech}
+                  loading={isCounterpartGeneratingSpeech}
                 />
-              </TouchableOpacity>
+                <Button
+                  title={isSending ? "Sending..." : "Send"}
+                  variant="primary"
+                  style={styles.smallButton}
+                  onPress={() => handleSend(false)}
+                  disabled={!counterpartText.trim() || isSending}
+                />
+              </View>
             </View>
           </View>
-
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={[styles.micButton, isCounterpartRecording && styles.micButtonActive]}
-              onPress={() => handleMicPress(false)}
-            >
-              <Ionicons 
-                name={isCounterpartRecording ? "stop-circle" : "mic"} 
-                size={28} 
-                color={isCounterpartRecording ? "#ef4444" : COLORS.primary} 
-              />
-            </TouchableOpacity>
-            <View style={styles.buttonRow}>
-              <Button 
-                title={isCounterpartSpeaking ? "Stop" : "Speak"} 
-                variant="outline" 
-                style={styles.smallButton}
-                onPress={() => handleSpeak(false)}
-                disabled={!counterpartText.trim() || isCounterpartGeneratingSpeech}
-                loading={isCounterpartGeneratingSpeech}
-              />
-              <Button 
-                title={isSending ? "Sending..." : "Send"} 
-                variant="primary" 
-                style={styles.smallButton}
-                onPress={() => handleSend(false)}
-                disabled={!counterpartText.trim() || isSending}
-              />
-            </View>
-          </View>
-        </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </DashboardLayout>
@@ -537,6 +544,7 @@ const TravelAssistantScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB', // Light Background
   },
   scrollView: {
     flex: 1,
@@ -558,7 +566,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: SIZES.h2,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937', // Dark Text
   },
   headerActions: {
     flexDirection: 'row',
@@ -570,29 +578,42 @@ const styles = StyleSheet.create({
     top: 12,
     right: 12,
     padding: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: 12,
   },
   voiceSelector: {
     minWidth: 130,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   languageSelector: {
     minWidth: 130,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   textAreaWrapper: {
     flex: 1,
     position: 'relative',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
   },
   textArea: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: COLORS.gray[700],
-    borderRadius: SIZES.radius,
-    padding: SIZES.padding,
-    color: COLORS.textLight,
-    fontSize: SIZES.body1,
+    padding: 16,
+    color: '#1F2937',
+    fontSize: 16,
     textAlignVertical: 'top',
+    height: '100%',
   },
   arrowButtons: {
     position: 'absolute',
@@ -611,12 +632,15 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(19, 127, 236, 0.2)',
+    backgroundColor: '#E0F2F1', // Light Teal
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#B2DFDB',
   },
   micButtonActive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: '#FEE2E2', // Light Red
+    borderColor: '#FECACA',
   },
   buttonRow: {
     flex: 1,
@@ -628,7 +652,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.gray[800],
+    backgroundColor: '#E5E7EB',
     marginHorizontal: SIZES.padding,
   },
 });

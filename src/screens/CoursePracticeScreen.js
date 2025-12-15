@@ -3,793 +3,606 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Animated,
-  LayoutAnimation,
   Platform,
-  UIManager,
+  SafeAreaView,
+  StatusBar,
+  Image,
+  Animated,
+  Easing,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SIZES } from '../constants';
-import { DashboardLayout, LanguageSelector, VoiceSelector, PronunciationResult } from '../components';
-import {
-  generateTextToSpeech,
-  playAudio,
-  stopAudio,
-  startRecording,
-  stopRecording,
-  transcribeAudio,
-} from '../services/openAI';
 import { useAuth, useToast } from '../context';
-import { getUserStorageKey } from '../utils/userStorage';
+import { playAudio, stopAudio, startRecording, stopRecording, transcribeAudio } from '../services/openAI';
 import { evaluatePronunciationWithFile } from '../services/railsAPI';
 import practiceSentencesAPI from '../services/practiceSentencesAPI';
 import userCourseProgressAPI from '../services/userCourseProgressAPI';
-
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+import { COLORS, IMAGES } from '../constants';
 
 const CoursePracticeScreen = ({ route, navigation }) => {
-  const { courseId, course, topic, topicTitle } = route.params || {};
-  const { token, user } = useAuth();
-  const { success, error: showError } = useToast();
+  const { courseId, course, topic, topicTitle, selectedVoice } = route.params || {};
+  const { token } = useAuth();
+  const { error: showError } = useToast();
 
-  // Practice sentences
   const [sentences, setSentences] = useState([]);
-  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
-  const [loadingSentences, setLoadingSentences] = useState(true);
-  const [userProgress, setUserProgress] = useState({}); // sentence_id -> progress data
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  // Voice and language (from course)
-  const [selectedVoice, setSelectedVoice] = useState('nova');
-  const courseLanguage = course?.language_code || 'en';
-
-  // Recording and playback
+  // Interaction State
   const [isRecording, setIsRecording] = useState(false);
-  const [isPlayingReference, setIsPlayingReference] = useState(false);
+  const [isPlayingRef, setIsPlayingRef] = useState(false);
   const [isPlayingUser, setIsPlayingUser] = useState(false);
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [referenceAudioUri, setReferenceAudioUri] = useState(null);
-  const [userAudioUri, setUserAudioUri] = useState(null);
-  const [userTranscript, setUserTranscript] = useState('');
-  const [pronunciationScore, setPronunciationScore] = useState(null);
-  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  // Evaluation Results
+  const [evaluation, setEvaluation] = useState(null); // { score, feedback, transcript }
+  const [recordingUri, setRecordingUri] = useState(null);
+  const [showTranslation, setShowTranslation] = useState(false);
 
   const recordingRef = useRef(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Current sentence
-  const currentSentence = sentences[currentSentenceIndex];
-  const currentProgress = currentSentence ? userProgress[currentSentence.id] : null;
+  // Animation effect
+  useEffect(() => {
+    if (isRecording) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 1000,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isRecording]);
 
   useEffect(() => {
-    if (courseId && topic) {
-      fetchSentences();
-      fetchUserProgress();
-    }
-  }, [courseId, topic]);
-
-  const fetchSentences = async () => {
-    try {
-      console.log('📚 [DEBUG] Fetching sentences for course:', courseId, 'topic:', topic);
-      setLoadingSentences(true);
-      const data = await practiceSentencesAPI.getByCourse(token, courseId, topic);
-      console.log('✅ [DEBUG] Fetched sentences:', data.length);
-      setSentences(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('❌ [ERROR] Failed to fetch sentences:', err);
-      showError('Failed to load practice sentences');
-    } finally {
-      setLoadingSentences(false);
-    }
-  };
-
-  const fetchUserProgress = async () => {
-    try {
-      console.log('📊 [DEBUG] Fetching user progress for course:', courseId);
-      const data = await userCourseProgressAPI.getAll(token, { course_id: courseId, topic });
-      console.log('✅ [DEBUG] Fetched progress records:', data.length);
-      
-      const progressMap = {};
-      if (Array.isArray(data)) {
-        data.forEach(progress => {
-          progressMap[progress.sentence_id] = progress;
-        });
-      }
-      setUserProgress(progressMap);
-    } catch (err) {
-      console.error('❌ [ERROR] Failed to fetch progress:', err);
-    }
-  };
-
-  const handleGenerateReferenceAudio = async () => {
-    if (!currentSentence) return;
-
-    try {
-      console.log('🎵 [DEBUG] Generating reference audio for:', currentSentence.sentence);
-      setIsGeneratingAudio(true);
-      setReferenceAudioUri(null);
-
-      const result = await generateTextToSpeech(
-        currentSentence.sentence,
-        selectedVoice,
-        courseLanguage
-      );
-
-      if (result.success && result.uri) {
-        console.log('✅ [DEBUG] Reference audio generated');
-        setReferenceAudioUri(result.uri);
-      } else {
-        showError('Failed to generate reference audio');
-      }
-    } catch (error) {
-      console.error('❌ [ERROR] Audio generation error:', error);
-      showError('Failed to generate audio');
-    } finally {
-      setIsGeneratingAudio(false);
-    }
-  };
-
-  const handlePlayReference = async () => {
-    if (!referenceAudioUri) {
-      await handleGenerateReferenceAudio();
-      return;
-    }
-
-    try {
-      if (isPlayingReference) {
-        await stopAudio();
-        setIsPlayingReference(false);
-      } else {
-        await stopAudio(); // Stop any other audio
-        setIsPlayingUser(false);
-        await playAudio(referenceAudioUri);
-        setIsPlayingReference(true);
-      }
-    } catch (error) {
-      console.error('❌ [ERROR] Playback error:', error);
-      showError('Failed to play audio');
-    }
-  };
-
-  const handleStartRecording = async () => {
-    try {
-      console.log('🎤 [DEBUG] Starting recording...');
-      const result = await startRecording();
-
-      if (result.success) {
-        recordingRef.current = result.recording;
-        setIsRecording(true);
-      } else {
-        Alert.alert('Error', 'Failed to start recording. Please grant microphone permission.');
-      }
-    } catch (error) {
-      console.error('❌ [ERROR] Recording error:', error);
-      setIsRecording(false);
-      Alert.alert('Error', 'Microphone error. Please try again.');
-    }
-  };
-
-  const handleStopRecording = async () => {
-    if (!recordingRef.current) return;
-
-    try {
-      console.log('🛑 [DEBUG] Stopping recording...');
-      setIsRecording(false);
-
-      const result = await stopRecording(recordingRef.current);
-      if (result.success) {
-        console.log('✅ [DEBUG] Recording stopped, URI:', result.uri);
-        setUserAudioUri(result.uri);
-
-        // Transcribe and evaluate
-        await handleEvaluateRecording(result.uri);
-      } else {
-        showError('Failed to stop recording');
-      }
-
-      recordingRef.current = null;
-    } catch (error) {
-      console.error('❌ [ERROR] Stop recording error:', error);
-      setIsRecording(false);
-      recordingRef.current = null;
-    }
-  };
-
-  const handleEvaluateRecording = async (audioUri) => {
-    if (!currentSentence) return;
-
-    try {
-      console.log('🔍 [DEBUG] Evaluating pronunciation...');
-      setIsEvaluating(true);
-      setPronunciationScore(null);
-      setUserTranscript('');
-
-      // Transcribe
-      const transcription = await transcribeAudio(audioUri, courseLanguage);
-      if (transcription.success) {
-        setUserTranscript(transcription.text);
-        console.log('✅ [DEBUG] Transcription:', transcription.text);
-      }
-
-      // Evaluate pronunciation
-      const evaluationResult = await evaluatePronunciationWithFile(
-        audioUri,
-        currentSentence.sentence,
-        courseLanguage
-      );
-
-      if (evaluationResult.success) {
-        const score = evaluationResult.score;
-        console.log('✅ [DEBUG] Pronunciation score:', score);
-
-        setPronunciationScore({
-          score: score,
-          accuracy_score: evaluationResult.accuracy_score,
-          fluency_score: evaluationResult.fluency_score,
-          completeness_score: evaluationResult.completeness_score,
-          feedback: evaluationResult.feedback,
-          original: currentSentence.sentence,
-          userText: transcription.text,
-          word_level_details: evaluationResult.word_level_details || [],
-        });
-
-        // Save progress
-        await saveProgress(score, evaluationResult);
-      } else {
-        showError(evaluationResult.error || 'Failed to evaluate pronunciation');
-      }
-    } catch (error) {
-      console.error('❌ [ERROR] Evaluation error:', error);
-      showError('Failed to evaluate pronunciation');
-    } finally {
-      setIsEvaluating(false);
-    }
-  };
-
-  const saveProgress = async (score, evaluationResult) => {
-    if (!currentSentence || !courseId) return;
-
-    try {
-      console.log('💾 [DEBUG] Saving progress for sentence:', currentSentence.id);
-      
-      const progressData = {
-        course_id: courseId,
-        sentence_id: currentSentence.id,
-        score: score,
-        completed: score >= 85, // Consider completed if score >= 85 (SUCCESS_THRESHOLD)
-        attempts: (currentProgress?.attempts || 0) + 1,
-      };
-
-      const response = await userCourseProgressAPI.create(token, progressData);
-      console.log('✅ [DEBUG] Progress saved:', response.progress.id);
-
-      // Update local progress state
-      setUserProgress(prev => ({
-        ...prev,
-        [currentSentence.id]: response.progress,
-      }));
-
-      // Refresh course progress
-      if (navigation.getState) {
-        // Notify parent screen to refresh
-      }
-    } catch (error) {
-      console.error('❌ [ERROR] Failed to save progress:', error);
-    }
-  };
-
-  const handlePlayUserRecording = async () => {
-    if (!userAudioUri) return;
-
-    try {
-      if (isPlayingUser) {
-        await stopAudio();
-        setIsPlayingUser(false);
-      } else {
-        await stopAudio(); // Stop any other audio
-        setIsPlayingReference(false);
-        await playAudio(userAudioUri);
-        setIsPlayingUser(true);
-      }
-    } catch (error) {
-      console.error('❌ [ERROR] Playback error:', error);
-      showError('Failed to play recording');
-    }
-  };
-
-  const handleNextSentence = () => {
-    if (currentSentenceIndex < sentences.length - 1) {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setCurrentSentenceIndex(currentSentenceIndex + 1);
-      // Reset state for new sentence
-      setReferenceAudioUri(null);
-      setUserAudioUri(null);
-      setUserTranscript('');
-      setPronunciationScore(null);
-      setIsPlayingReference(false);
-      setIsPlayingUser(false);
-    }
-  };
-
-  const handlePreviousSentence = () => {
-    if (currentSentenceIndex > 0) {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setCurrentSentenceIndex(currentSentenceIndex - 1);
-      // Reset state for new sentence
-      setReferenceAudioUri(null);
-      setUserAudioUri(null);
-      setUserTranscript('');
-      setPronunciationScore(null);
-      setIsPlayingReference(false);
-      setIsPlayingUser(false);
-    }
-  };
-
-  // Auto-generate reference audio when sentence changes
-  useEffect(() => {
-    if (currentSentence && !referenceAudioUri) {
-      handleGenerateReferenceAudio();
-    }
-  }, [currentSentenceIndex]);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      stopAudio();
-    };
+    loadSentences();
+    return () => stopAudio();
   }, []);
 
-  if (loadingSentences) {
+  const loadSentences = async () => {
+    try {
+      setLoading(true);
+      const data = await practiceSentencesAPI.getByCourse(token, courseId, topic);
+      setSentences(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load sentences', err);
+      showError('Failed to load sentences.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const activeSentence = sentences[currentIndex];
+
+  const handleNext = () => {
+    if (currentIndex < sentences.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setShowTranslation(false); // Reset translation view
+      resetState();
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setShowTranslation(false); // Reset translation view
+      resetState();
+    }
+  };
+
+  const resetState = () => {
+    stopAudio();
+    setIsPlayingRef(false);
+    setIsPlayingUser(false);
+    setIsRecording(false);
+    setEvaluation(null);
+    setRecordingUri(null);
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      setIsRecording(false);
+      setProcessing(true);
+      try {
+        const result = await stopRecording(recordingRef.current);
+        if (result.success) {
+          setRecordingUri(result.uri);
+          await handleEvaluation(result.uri);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setProcessing(false);
+        recordingRef.current = null;
+      }
+    } else {
+      try {
+        const result = await startRecording();
+        if (result.success) {
+          recordingRef.current = result.recording;
+          setIsRecording(true);
+        }
+      } catch (err) {
+        Alert.alert('Error', 'Could not start recording.');
+      }
+    }
+  };
+
+  const handleEvaluation = async (uri) => {
+    if (!activeSentence) return;
+    try {
+      // Evaluate
+      // Note: Real implementation would actally generate feedback here using the API
+      // For simplicity reusing existing service
+      const result = await evaluatePronunciationWithFile(
+        uri,
+        activeSentence.sentence,
+        course?.language_code || 'en'
+      );
+
+      if (result.success) {
+        setEvaluation({
+          score: result.score,
+          transcript: result.transcript,
+          feedback: result.feedback,
+          words: result.word_level_details
+        });
+        // Save progress
+        saveProgress(result.score);
+      } else {
+        showError('Evaluation failed.');
+      }
+
+    } catch (err) {
+      console.error(err);
+      showError('Evaluation error.');
+    }
+  };
+
+  const saveProgress = async (score) => {
+    try {
+      await userCourseProgressAPI.create(token, {
+        course_id: courseId,
+        sentence_id: activeSentence.id,
+        score: score,
+        completed: score >= 85
+      });
+    } catch (e) { console.log('Progress save failed', e) }
+  };
+
+  const playReference = async () => {
+    // TODO: Implement TTS for reference based on selectedVoice
+    // Placeholder
+    Alert.alert('Info', `Playing reference using ${selectedVoice} voice...`);
+  };
+
+  if (loading) {
     return (
-      <DashboardLayout navigation={navigation}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading practice sentences...</Text>
-        </View>
-      </DashboardLayout>
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#2D7F83" />
+      </View>
     );
   }
 
   if (sentences.length === 0) {
     return (
-      <DashboardLayout navigation={navigation}>
-        <View style={styles.centerContainer}>
-          <Ionicons name="book-outline" size={48} color={COLORS.gray[400]} />
-          <Text style={styles.emptyText}>No sentences available</Text>
-          <Text style={styles.emptySubtext}>
-            Practice sentences for this topic are not available yet
-          </Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="close" size={24} color="#1F2937" />
           </TouchableOpacity>
         </View>
-      </DashboardLayout>
+        <View style={styles.centerContainer}>
+          <Text style={styles.emptyText}>No sentences found for this topic.</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  const completedCount = Object.values(userProgress).filter(p => p.completed).length;
-  const progressPercentage = sentences.length > 0 
-    ? Math.round((completedCount / sentences.length) * 100) 
-    : 0;
+  // Highlight words based on evaluation
+  const renderSentenceText = () => {
+    if (!evaluation || !evaluation.words) {
+      return <Text style={styles.sentenceText}>{activeSentence?.sentence}</Text>;
+    }
+
+    return (
+      <Text style={styles.sentenceText}>
+        {evaluation.words.map((w, i) => (
+          <Text key={i} style={{
+            color: w.accuracy_score >= 80 ? '#1F2937' : '#EF4444',
+            // Bold if good? 
+          }}>
+            {w.word}{' '}
+          </Text>
+        ))}
+      </Text>
+    );
+  };
 
   return (
-    <DashboardLayout navigation={navigation}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#E0F2F1" />
+
+      {/* Top Section: Header & Avatar (60%) */}
+      <View style={styles.topSection}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.textLight} />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
+            <Ionicons name="close" size={28} color="#1F2937" />
           </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {topicTitle || topic}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              {currentSentenceIndex + 1} / {sentences.length}
-            </Text>
+          <View style={styles.progressContainer}>
+            <Text style={styles.progressText}>{currentIndex + 1} / {sentences.length}</Text>
           </View>
+          <View style={{ width: 44 }} />
         </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progressPercentage}%` },
-              ]}
+        {/* Hero Avatar */}
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatarGlow}>
+            <Image
+              source={selectedVoice === 'female' ? IMAGES.yusuf : IMAGES.yusuf}
+              style={styles.avatar}
+              resizeMode="cover"
             />
           </View>
-          <Text style={styles.progressText}>
-            {completedCount} / {sentences.length} completed ({progressPercentage}%)
-          </Text>
         </View>
+      </View>
 
-        {/* Current Sentence Card */}
-        <View style={styles.sentenceCard}>
-          <Text style={styles.sentenceText}>{currentSentence?.sentence}</Text>
-          
-          {currentProgress && (
-            <View style={styles.sentenceProgress}>
-              <Ionicons
-                name={currentProgress.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                size={20}
-                color={currentProgress.completed ? '#10b981' : COLORS.gray[400]}
-              />
-              <Text style={styles.sentenceProgressText}>
-                {currentProgress.completed ? 'Completed' : 'In Progress'} • 
-                Best Score: {currentProgress.best_score || currentProgress.score || 0}% • 
-                Attempts: {currentProgress.attempts || 0}
-              </Text>
+      {/* Bottom Section: Interaction (40%) */}
+      <View style={styles.bottomSection}>
+
+        {/* Sentence Card Area */}
+        <View style={styles.cardArea}>
+          <TouchableOpacity
+            style={styles.navArrow}
+            onPress={handlePrev}
+            disabled={currentIndex === 0}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
+            <Ionicons name="chevron-back" size={32} color={currentIndex === 0 ? "#D1D5DB" : "#4B5563"} />
+          </TouchableOpacity>
+
+          <View style={styles.sentenceCard}>
+            <View style={styles.sentenceContent}>
+              <ScrollView
+                contentContainerStyle={styles.sentenceScrollContent}
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
+                {renderSentenceText()}
+
+                {showTranslation && (
+                  <View style={styles.translationContainer}>
+                    <View style={styles.divider} />
+                    <Text style={styles.translationText}>
+                      {activeSentence?.turkish_translation || activeSentence?.translation || "Çeviri bulunamadı."}
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
             </View>
-          )}
-        </View>
-
-        {/* Reference Audio Section */}
-        <View style={styles.audioSection}>
-          <Text style={styles.sectionTitle}>Reference Audio</Text>
-          <TouchableOpacity
-            style={styles.playButton}
-            onPress={handlePlayReference}
-            disabled={isGeneratingAudio}
-          >
-            {isGeneratingAudio ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <>
-                <Ionicons
-                  name={isPlayingReference ? 'pause' : 'play'}
-                  size={24}
-                  color={COLORS.white}
-                />
-                <Text style={styles.playButtonText}>
-                  {isPlayingReference ? 'Pause' : 'Play Reference'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Recording Section */}
-        <View style={styles.recordingSection}>
-          <Text style={styles.sectionTitle}>Your Recording</Text>
-          <TouchableOpacity
-            style={[
-              styles.recordButton,
-              isRecording && styles.recordButtonActive,
-            ]}
-            onPress={isRecording ? handleStopRecording : handleStartRecording}
-            disabled={isEvaluating}
-          >
-            {isEvaluating ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <>
-                <Ionicons
-                  name={isRecording ? 'stop' : 'mic'}
-                  size={24}
-                  color={COLORS.white}
-                />
-                <Text style={styles.recordButtonText}>
-                  {isRecording ? 'Stop Recording' : 'Start Recording'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {userAudioUri && (
             <TouchableOpacity
-              style={styles.playUserButton}
-              onPress={handlePlayUserRecording}
+              style={styles.translationButton}
+              hitSlop={{ top: 10, bottom: 10 }}
+              onPress={() => setShowTranslation(!showTranslation)}
             >
-              <Ionicons
-                name={isPlayingUser ? 'pause-circle' : 'play-circle'}
-                size={20}
-                color={COLORS.primary}
-              />
-              <Text style={styles.playUserText}>
-                {isPlayingUser ? 'Pause' : 'Play Your Recording'}
+              <Text style={styles.translationButtonText}>
+                {showTranslation ? "Çeviriyi Gizle" : "Çeviriyi Göster"}
               </Text>
             </TouchableOpacity>
-          )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.navArrow}
+            onPress={handleNext}
+            disabled={currentIndex === sentences.length - 1}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
+            <Ionicons name="chevron-forward" size={32} color={currentIndex === sentences.length - 1 ? "#D1D5DB" : "#4B5563"} />
+          </TouchableOpacity>
         </View>
 
-        {/* Pronunciation Result */}
-        {pronunciationScore && (
-          <View style={styles.resultSection}>
-            <PronunciationResult
-              overallScore={pronunciationScore.score}
-              accuracy={pronunciationScore.accuracy_score}
-              fluency={pronunciationScore.fluency_score}
-              completeness={pronunciationScore.completeness_score}
-              words={pronunciationScore.word_level_details || []}
-              transcript={pronunciationScore.userText}
-              referenceText={pronunciationScore.original}
-              showTitle={true}
-            />
+        {/* Result Feedback Overlay (Optional placement) */}
+        {evaluation && (
+          <View style={styles.evaluationFeedback}>
+            <Text style={[styles.evaluationText, { color: evaluation.score >= 80 ? '#047857' : '#B91C1C' }]}>
+              Result: {Math.round(evaluation.score)}%
+            </Text>
           </View>
         )}
 
-        {/* Navigation Buttons */}
-        <View style={styles.navigationSection}>
+        {/* Ergonomic Controls */}
+        <View style={styles.controlsArea}>
+          {/* Reference Audio */}
           <TouchableOpacity
-            style={[
-              styles.navButton,
-              currentSentenceIndex === 0 && styles.navButtonDisabled,
-            ]}
-            onPress={handlePreviousSentence}
-            disabled={currentSentenceIndex === 0}
+            style={styles.sideControlButton}
+            onPress={playReference}
+            activeOpacity={0.7}
           >
-            <Ionicons
-              name="chevron-back"
-              size={20}
-              color={currentSentenceIndex === 0 ? COLORS.gray[500] : COLORS.textLight}
-            />
-            <Text
-              style={[
-                styles.navButtonText,
-                currentSentenceIndex === 0 && styles.navButtonTextDisabled,
-              ]}
-            >
-              Previous
-            </Text>
+            <Ionicons name="volume-medium" size={28} color="#4B5563" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.navButton,
-              styles.navButtonPrimary,
-              currentSentenceIndex === sentences.length - 1 && styles.navButtonDisabled,
-            ]}
-            onPress={handleNextSentence}
-            disabled={currentSentenceIndex === sentences.length - 1}
-          >
-            <Text
+          {/* Main Record Button */}
+          <View style={styles.micContainer}>
+            <Animated.View style={[
+              styles.micPulseRing,
+              {
+                transform: [{ scale: pulseAnim }],
+                opacity: isRecording ? 0.3 : 0,
+              }
+            ]} />
+            <TouchableOpacity
               style={[
-                styles.navButtonText,
-                styles.navButtonTextPrimary,
-                currentSentenceIndex === sentences.length - 1 && styles.navButtonTextDisabled,
+                styles.mainMicButton,
+                isRecording && styles.recordingState
               ]}
+              onPress={toggleRecording}
+              disabled={processing}
+              activeOpacity={0.8}
             >
-              Next
-            </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={currentSentenceIndex === sentences.length - 1 ? COLORS.gray[500] : COLORS.white}
-            />
+              {processing ? (
+                <ActivityIndicator color="#FFFFFF" size="large" />
+              ) : (
+                <Ionicons name={isRecording ? "stop" : "mic"} size={44} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* User Playback */}
+          <TouchableOpacity
+            style={[styles.sideControlButton, !recordingUri && styles.disabledButton]}
+            onPress={() => recordingUri && playAudio(recordingUri)}
+            disabled={!recordingUri}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="play" size={28} color={recordingUri ? "#4B5563" : "#D1D5DB"} />
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </DashboardLayout>
+
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  scrollView: {
+  container: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: SIZES.padding,
+    backgroundColor: '#E0F2F1', // Soft Mint Background
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SIZES.padding,
   },
-  loadingText: {
-    marginTop: SIZES.padding,
-    fontSize: SIZES.body,
-    color: COLORS.textLight,
-  },
-  emptyText: {
-    fontSize: SIZES.h3,
-    fontWeight: '600',
-    color: COLORS.textLight,
-    marginTop: SIZES.padding,
-  },
-  emptySubtext: {
-    fontSize: SIZES.body,
-    color: COLORS.gray[400],
-    textAlign: 'center',
-    marginTop: SIZES.base,
-    marginBottom: SIZES.padding,
+  // --- TOP SECTION ---
+  topSection: {
+    flex: 0.55, // 55% height
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SIZES.padding,
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 40 : 10,
+    zIndex: 10,
   },
-  backButton: {
-    padding: 4,
-    marginRight: SIZES.base,
+  closeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: SIZES.h2,
-    fontWeight: 'bold',
-    color: COLORS.textLight,
-  },
-  headerSubtitle: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[400],
-    marginTop: 2,
-  },
-  progressSection: {
-    marginBottom: SIZES.padding,
-  },
-  progressBar: {
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 6,
+  progressContainer: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   progressText: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[400],
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#1F2937',
+    fontSize: 14,
+  },
+  avatarContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -20, // Pull up slightly to center logically
+  },
+  avatarGlow: {
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2D7F83',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2, // Glow effect
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  avatar: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+  },
+
+  // --- BOTTOM SECTION ---
+  bottomSection: {
+    flex: 0.45, // 45% height
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    paddingTop: 30,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 8,
+    justifyContent: 'space-between', // Distribute Space
+  },
+  // Card
+  cardArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  navArrow: {
+    padding: 8,
   },
   sentenceCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: SIZES.padding,
-    marginBottom: SIZES.padding,
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 24,
+    padding: 16,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#F3F4F6',
+    minHeight: 120,
+    maxHeight: 200,
+    justifyContent: 'center',
+  },
+  sentenceContent: {
+    width: '100%',
+    maxHeight: 140, // Allow internal scroll if very long
+  },
+  sentenceScrollContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
   },
   sentenceText: {
-    fontSize: SIZES.h3,
-    fontWeight: '600',
-    color: COLORS.textLight,
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#1F2937',
     textAlign: 'center',
-    marginBottom: SIZES.base,
-    lineHeight: 28,
+    lineHeight: 30, // Increased line height for readability
   },
-  sentenceProgress: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: SIZES.base,
-    paddingTop: SIZES.base,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  sentenceProgressText: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[400],
-  },
-  audioSection: {
-    marginBottom: SIZES.padding,
-  },
-  sectionTitle: {
-    fontSize: SIZES.h4,
-    fontWeight: '600',
-    color: COLORS.textLight,
-    marginBottom: SIZES.base,
-  },
-  playButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
-  playButtonText: {
-    color: COLORS.white,
-    fontSize: SIZES.body1,
-    fontWeight: '600',
-  },
-  recordingSection: {
-    marginBottom: SIZES.padding,
-  },
-  recordButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.gray[700],
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginBottom: SIZES.base,
-  },
-  recordButtonActive: {
-    backgroundColor: '#ef4444',
-  },
-  recordButtonText: {
-    color: COLORS.white,
-    fontSize: SIZES.body1,
-    fontWeight: '600',
-  },
-  playUserButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
-  },
-  playUserText: {
-    fontSize: SIZES.body3,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  resultSection: {
-    marginBottom: SIZES.padding,
-  },
-  navigationSection: {
-    flexDirection: 'row',
-    gap: SIZES.base,
-    marginTop: SIZES.padding,
-    marginBottom: SIZES.padding * 2,
-  },
-  navButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+  translationButton: {
+    marginTop: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 6,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 20, // Chip style
   },
-  navButtonPrimary: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  navButtonDisabled: {
-    opacity: 0.5,
-  },
-  navButtonText: {
-    fontSize: SIZES.body1,
-    fontWeight: '600',
-    color: COLORS.textLight,
-  },
-  navButtonTextPrimary: {
-    color: COLORS.white,
-  },
-  navButtonTextDisabled: {
-    color: COLORS.gray[500],
-  },
-  backButton: {
-    paddingHorizontal: SIZES.padding * 2,
-    paddingVertical: SIZES.base,
-    backgroundColor: COLORS.primary,
-    borderRadius: SIZES.radius,
-    marginTop: SIZES.padding,
-  },
-  backButtonText: {
-    color: COLORS.white,
+  translationButtonText: {
+    color: '#4F46E5',
+    fontSize: 13,
     fontWeight: '600',
   },
+  translationContainer: {
+    marginTop: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  divider: {
+    height: 1,
+    width: '80%',
+    backgroundColor: '#E5E7EB',
+    marginBottom: 8,
+  },
+  translationText: {
+    fontSize: 17,
+    color: '#4B5563',
+    fontStyle: 'italic',
+    fontWeight: '400',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  // Evaluation
+  evaluationFeedback: {
+    position: 'absolute',
+    top: -20,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  evaluationText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+
+  // Controls
+  controlsArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingBottom: Platform.OS === 'ios' ? 10 : 20,
+    marginTop: 10,
+  },
+  sideControlButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledButton: {
+    opacity: 0.4,
+  },
+  micContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 120,
+    height: 120,
+  },
+  micPulseRing: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#2D7F83',
+  },
+  mainMicButton: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#2D7F83',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2D7F83',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  recordingState: {
+    backgroundColor: '#EF4444',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#6B7280',
+  }
 });
 
 export default CoursePracticeScreen;
-

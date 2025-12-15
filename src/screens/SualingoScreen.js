@@ -1889,7 +1889,8 @@ const styles = StyleSheet.create({
   footerSection: {
     flexDirection: 'row',
     gap: 12,
-    paddingVertical: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
     paddingHorizontal: SIZES.padding,
     justifyContent: 'center',
   },

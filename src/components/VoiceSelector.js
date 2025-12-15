@@ -25,11 +25,15 @@ const voices = [
   { id: 'shimmer', name: 'Shimmer', gender: 'Female', description: 'Soft and soothing' },
 ];
 
-const VoiceSelector = ({ selectedVoice, onVoiceChange, style }) => {
+const VoiceSelector = ({ selectedVoice, onVoiceChange, style, textColor, labelColor }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [previewingVoice, setPreviewingVoice] = useState(null);
-  
+
   const selectedVoiceObj = voices.find(v => v.id === selectedVoice) || voices[0];
+
+  // Use provided colors or defaults
+  const mainTextColor = textColor || COLORS.textLight;
+  const secondaryTextColor = labelColor || COLORS.gray[400];
 
   // Cleanup on unmount
   useEffect(() => {
@@ -58,10 +62,10 @@ const VoiceSelector = ({ selectedVoice, onVoiceChange, style }) => {
 
     // Start new preview immediately
     setPreviewingVoice(voiceId);
-    
+
     // Generate and play voice
     const result = await generateVoicePreview(voiceId);
-    
+
     if (result.success) {
       // Auto-stop indicator after 3 seconds (sound will finish naturally)
       setTimeout(() => {
@@ -81,13 +85,13 @@ const VoiceSelector = ({ selectedVoice, onVoiceChange, style }) => {
         activeOpacity={0.7}
       >
         <View style={styles.voiceInfo}>
-          <Text style={styles.voiceName}>{selectedVoiceObj.name}</Text>
-          <Text style={styles.voiceGender}>{selectedVoiceObj.gender}</Text>
+          <Text style={[styles.voiceName, { color: mainTextColor }]}>{selectedVoiceObj.name}</Text>
+          <Text style={[styles.voiceGender, { color: secondaryTextColor }]}>{selectedVoiceObj.gender}</Text>
         </View>
-        <Ionicons 
-          name="chevron-down" 
-          size={20} 
-          color="rgba(255,255,255,0.6)" 
+        <Ionicons
+          name="chevron-down"
+          size={20}
+          color={mainTextColor === COLORS.textLight ? "rgba(255,255,255,0.6)" : COLORS.gray[500]}
         />
       </TouchableOpacity>
 
@@ -98,7 +102,7 @@ const VoiceSelector = ({ selectedVoice, onVoiceChange, style }) => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
             onPress={() => setModalVisible(false)}
@@ -110,11 +114,11 @@ const VoiceSelector = ({ selectedVoice, onVoiceChange, style }) => {
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={COLORS.textLight} />
+                <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
+            <ScrollView
               style={styles.voiceList}
               contentContainerStyle={styles.voiceListContent}
               showsVerticalScrollIndicator={true}
@@ -151,10 +155,10 @@ const VoiceSelector = ({ selectedVoice, onVoiceChange, style }) => {
                     onPress={() => handlePreview(voice.id)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons 
-                      name={previewingVoice === voice.id ? "pause" : "play"} 
-                      size={16} 
-                      color={COLORS.primary} 
+                    <Ionicons
+                      name={previewingVoice === voice.id ? "pause" : "play"}
+                      size={16}
+                      color={COLORS.primary}
                     />
                   </TouchableOpacity>
                 </View>
@@ -204,16 +208,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'transparent',
   },
   modalContent: {
     width: '90%',
     maxWidth: 400,
     maxHeight: SCREEN_HEIGHT * 0.7,
-    backgroundColor: 'rgba(30, 41, 59, 0.98)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: '#E5E7EB',
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -228,13 +232,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(30, 41, 59, 1)',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
   },
   modalTitle: {
     fontSize: SIZES.h4,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   closeButton: {
     padding: 4,
@@ -249,7 +255,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   voiceOption: {
     flex: 1,
@@ -268,19 +277,19 @@ const styles = StyleSheet.create({
   voiceOptionName: {
     fontSize: SIZES.body1,
     fontWeight: '600',
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   voiceOptionNameSelected: {
     color: COLORS.primary,
   },
   voiceOptionGender: {
     fontSize: SIZES.body3,
-    color: COLORS.gray[400],
+    color: '#4B5563',
     marginTop: 2,
   },
   voiceOptionDescription: {
     fontSize: SIZES.body4,
-    color: COLORS.gray[500],
+    color: '#6B7280',
     marginTop: 2,
   },
   previewButton: {

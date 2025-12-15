@@ -5,323 +5,135 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
+  Switch,
+  SafeAreaView,
+  StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button, ConfirmDialog, ValidationMessage } from '../components';
-import { COLORS, FONTS, SIZES } from '../constants/theme';
+import { Button, ConfirmDialog } from '../components';
+import { COLORS, SIZES } from '../constants/theme';
 import { useAuth, useToast } from '../context';
-import authAPI from '../services/authAPI';
+
+const THEME = {
+  primary: '#2D7F83',
+  background: '#F0F9FA', // Light teal tint bg
+  cardBg: '#FFFFFF',
+  text: '#1F2937',
+  textSecondary: '#6B7280',
+  danger: '#EF4444',
+};
 
 const ProfileScreen = ({ navigation }) => {
-  const { user, token, logout, updateUser } = useAuth();
-  const { success, error: showError, info } = useToast();
-  
-  const [username, setUsername] = useState(user?.username || '');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [editingUsername, setEditingUsername] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
-  
-  // Dialog states
+  const { user, logout } = useAuth();
+  const { success } = useToast();
+
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
-  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
-  const validatePassword = (password) => {
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasDigit = /\d/.test(password);
-    const isLongEnough = password.length >= 8;
-    
-    return hasUpperCase && hasLowerCase && hasDigit && isLongEnough;
-  };
-
-  const handleUpdateUsername = async () => {
-    if (!username.trim()) {
-      showError('Username cannot be empty');
-      return;
-    }
-
-    if (username.trim().length < 3) {
-      showError('Username must be at least 3 characters');
-      return;
-    }
-
-    if (username.trim() === user?.username) {
-      info('Username is the same');
-      setEditingUsername(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await authAPI.updateProfile(token, username.trim());
-      
-      await updateUser(response.user);
-      success(response.message || 'Username updated successfully!');
-      setEditingUsername(false);
-    } catch (error) {
-      console.error('Update username error:', error);
-      const errorMessage = error.errors
-        ? error.errors.join(', ')
-        : error.error || 'Failed to update username';
-      showError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      showError('Please fill in all password fields');
-      return;
-    }
-
-    if (!validatePassword(newPassword)) {
-      showError('Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 digit');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      showError('New passwords do not match');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await authAPI.changePassword(
-        token,
-        currentPassword,
-        newPassword
-      );
-      
-      success(response.message || 'Password changed successfully!');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setChangingPassword(false);
-    } catch (error) {
-      console.error('Change password error:', error);
-      const errorMessage = error.errors
-        ? error.errors.join(', ')
-        : error.error || 'Failed to change password';
-      showError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    setLogoutDialogVisible(true);
-  };
-  
-  const confirmLogout = async () => {
+  const handleLogout = async () => {
+    setLogoutDialogVisible(false);
     await logout();
     success('Logged out successfully');
     navigation.replace('Login');
   };
 
-  const handleDeleteAccount = () => {
-    setDeleteDialogVisible(true);
-  };
-  
-  const confirmDeleteAccount = async () => {
-    setLoading(true);
-    try {
-      await authAPI.deleteAccount(token);
-      success('Account deleted successfully');
-      await logout();
-      navigation.replace('Login');
-    } catch (error) {
-      console.error('Delete account error:', error);
-      showError(error.error || 'Failed to delete account. Please try again.');
-    } finally {
-      setLoading(false);
-      setDeleteDialogVisible(false);
-    }
-  };
+  const toggleTheme = () => setIsDarkMode(previousState => !previousState);
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
+  const ProfileMenuItem = ({ icon, title, onPress, showArrow = true, color = THEME.text }) => (
+    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.menuItemLeft}>
+        <Ionicons name={icon} size={24} color={THEME.textSecondary} />
+        <Text style={[styles.menuItemText, { color }]}>{title}</Text>
+      </View>
+      {showArrow && <Ionicons name="chevron-forward" size={20} color={THEME.textSecondary} />}
+    </TouchableOpacity>
+  );
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
+
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate('Dashboard')}
         >
-          <Ionicons name="arrow-back" size={24} color={COLORS.primary || '#137FEC'} />
+          <Ionicons name="arrow-back" size={24} color={THEME.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Profile</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      {/* User Info Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Information</Text>
-        
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Email</Text>
-          <Text style={styles.value}>{user?.email}</Text>
-          <Text style={styles.note}>Email cannot be changed</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Settings & Profile</Text>
+          <Text style={styles.headerSubtitle}>(Ayarlar ve Profil)</Text>
         </View>
+        <View style={styles.placeholderButton} />
+      </View>
 
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Member Since</Text>
-          <Text style={styles.value}>
-            {user?.created_at ? formatDate(user.created_at) : 'N/A'}
-          </Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <TouchableOpacity
+            style={styles.settingsIcon}
+            onPress={() => Alert.alert('Settings', 'General settings would go here')}
+          >
+            <Ionicons name="settings-outline" size={24} color={THEME.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={styles.avatarContainer}>
+            {/* Placeholder Avatar Image */}
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={48} color="#FFFFFF" />
+            </View>
+          </View>
+
+          <Text style={styles.username}>{user?.username || 'username'}</Text>
+
+          {/* Theme Switch */}
+          <View style={styles.themeRow}>
+            <View style={styles.themeInfo}>
+              <Ionicons name="contrast" size={24} color={THEME.textSecondary} style={{ marginRight: 12 }} />
+              <View>
+                <Text style={styles.themeTitle}>Tema Seçimi</Text>
+                <Text style={styles.themeSubtitle}>(Koyu/Açık Mod)</Text>
+              </View>
+            </View>
+            <Switch
+              trackColor={{ false: "#767577", true: THEME.primary }}
+              thumbColor={isDarkMode ? "#FFFFFF" : "#f4f3f4"}
+              ios_backgroundColor="#3e3e3e"
+              onValueChange={toggleTheme}
+              value={isDarkMode}
+            />
+          </View>
+
+          {/* Menu Items */}
+          <View style={styles.menuContainer}>
+            <ProfileMenuItem
+              icon="notifications-outline"
+              title="Bildirim Ayarları"
+              onPress={() => Alert.alert('Info', 'Notification settings')}
+            />
+            <View style={styles.divider} />
+
+            <ProfileMenuItem
+              icon="person-outline"
+              title="Hesap Yönetimi"
+              onPress={() => Alert.alert('Info', 'Account management')}
+            />
+          </View>
+
+          {/* Logout Button */}
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => setLogoutDialogVisible(true)}
+          >
+            <Text style={styles.logoutText}>Çıkış Yap</Text>
+          </TouchableOpacity>
+
         </View>
-      </View>
+      </ScrollView>
 
-      {/* Username Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Username</Text>
-        
-        {editingUsername ? (
-          <>
-            <Input
-              placeholder="Enter new username"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              editable={!loading}
-            />
-            <View style={styles.buttonRow}>
-              <Button
-                title="Cancel"
-                onPress={() => {
-                  setUsername(user?.username || '');
-                  setEditingUsername(false);
-                }}
-                disabled={loading}
-                variant="outline"
-                style={styles.halfButton}
-              />
-              <Button
-                title={loading ? 'Saving...' : 'Save'}
-                onPress={handleUpdateUsername}
-                disabled={loading}
-                style={styles.halfButton}
-              />
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.currentValue}>{user?.username}</Text>
-            <Button
-              title="Change Username"
-              onPress={() => setEditingUsername(true)}
-              variant="outline"
-            />
-          </>
-        )}
-      </View>
-
-      {/* Password Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Password</Text>
-        
-        {changingPassword ? (
-          <>
-            <Input
-              label="Current Password"
-              placeholder="Enter current password"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-              editable={!loading}
-            />
-            <Input
-              label="New Password"
-              placeholder="Enter new password"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-              editable={!loading}
-            />
-            <Input
-              label="Confirm New Password"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              editable={!loading}
-            />
-            <Text style={styles.passwordHint}>
-              Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 digit
-            </Text>
-            <View style={styles.buttonRow}>
-              <Button
-                title="Cancel"
-                onPress={() => {
-                  setCurrentPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                  setChangingPassword(false);
-                }}
-                disabled={loading}
-                variant="outline"
-                style={styles.halfButton}
-              />
-              <Button
-                title={loading ? 'Changing...' : 'Change'}
-                onPress={handleChangePassword}
-                disabled={loading}
-                style={styles.halfButton}
-              />
-            </View>
-          </>
-        ) : (
-          <Button
-            title="Change Password"
-            onPress={() => setChangingPassword(true)}
-            variant="outline"
-          />
-        )}
-      </View>
-
-      {/* Logout Section */}
-      <View style={styles.section}>
-        <Button
-          title="Logout"
-          onPress={handleLogout}
-          variant="outline"
-        />
-      </View>
-
-      {/* Delete Account Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Danger Zone</Text>
-        <Text style={styles.warningText}>
-          Once you delete your account, there is no going back. All your data including recordings, videos, and custom avatars will be permanently deleted.
-        </Text>
-        <Button
-          title="Delete Account"
-          onPress={handleDeleteAccount}
-          variant="danger"
-        />
-      </View>
-
-      {loading && (
-        <ActivityIndicator
-          size="large"
-          color={COLORS.primary}
-          style={styles.loader}
-        />
-      )}
-      
-      {/* Logout Confirmation Dialog */}
       <ConfirmDialog
         visible={logoutDialogVisible}
         title="Logout"
@@ -329,119 +141,164 @@ const ProfileScreen = ({ navigation }) => {
         type="warning"
         confirmText="Logout"
         cancelText="Cancel"
-        onConfirm={confirmLogout}
+        onConfirm={handleLogout}
         onCancel={() => setLogoutDialogVisible(false)}
+        overlayStyle={{ backgroundColor: 'transparent' }}
       />
-      
-      {/* Delete Account Confirmation Dialog */}
-      <ConfirmDialog
-        visible={deleteDialogVisible}
-        title="Delete Account"
-        message="This action cannot be undone. All your data including recordings, videos, and custom avatars will be permanently deleted."
-        type="danger"
-        confirmText="Delete Forever"
-        cancelText="Cancel"
-        onConfirm={confirmDeleteAccount}
-        onCancel={() => setDeleteDialogVisible(false)}
-        loading={loading}
-      />
-    </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background || '#FFFFFF',
-  },
-  content: {
-    padding: SIZES.padding || 20,
+    backgroundColor: THEME.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 30,
-    marginTop: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    marginTop: Platform.OS === 'android' ? 30 : 0,
   },
   backButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  headerSpacer: {
+  placeholderButton: {
     width: 40,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.primary || '#4A90E2',
-    flex: 1,
-    textAlign: 'center',
+  headerTitleContainer: {
+    alignItems: 'center',
   },
-  section: {
-    marginBottom: 30,
-    backgroundColor: '#F9F9F9',
-    borderRadius: 12,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827', // Darker gray for better contrast
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#4B5563', // Darker gray for better contrast
+  },
+  content: {
     padding: 20,
+    paddingTop: 10,
   },
-  sectionTitle: {
-    fontSize: 18,
+  profileCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  settingsIcon: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 1,
+  },
+  avatarContainer: {
+    marginBottom: 16,
+    marginTop: 10,
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#374151', // Dark grey placeholder
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  username: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.text || '#333',
-    marginBottom: 15,
+    color: '#1F2937',
+    marginBottom: 32,
   },
-  infoRow: {
-    marginBottom: 15,
-  },
-  label: {
-    fontSize: 14,
-    color: COLORS.textSecondary || '#999',
-    marginBottom: 4,
-  },
-  value: {
-    fontSize: 16,
-    color: COLORS.text || '#333',
-    fontWeight: '500',
-  },
-  note: {
-    fontSize: 12,
-    color: COLORS.textSecondary || '#999',
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  currentValue: {
-    fontSize: 18,
-    color: COLORS.text || '#333',
-    fontWeight: '600',
-    marginBottom: 15,
-  },
-  buttonRow: {
+  themeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    width: '100%',
+    marginBottom: 24,
+    paddingHorizontal: 8,
   },
-  halfButton: {
-    flex: 1,
+  themeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  passwordHint: {
+  themeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  themeSubtitle: {
     fontSize: 12,
-    color: COLORS.textSecondary || '#999',
-    marginBottom: 15,
-    textAlign: 'center',
+    color: '#9CA3AF',
   },
-  loader: {
-    marginTop: 20,
+  menuContainer: {
+    width: '100%',
+    marginBottom: 32,
   },
-  warningText: {
-    fontSize: 14,
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1F2937',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    width: '100%',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    width: '100%',
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#EF4444',
-    lineHeight: 20,
-    marginBottom: 15,
-    textAlign: 'center',
   },
 });
 
 export default ProfileScreen;
-

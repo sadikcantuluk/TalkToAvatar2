@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
   Alert,
   RefreshControl,
@@ -41,7 +41,7 @@ const PastAudioListScreen = ({ navigation }) => {
   const onRefresh = async () => {
     setRefreshing(true);
     await refresh();
-      setRefreshing(false);
+    setRefreshing(false);
   };
 
   const handleDelete = async (id) => {
@@ -57,17 +57,17 @@ const PastAudioListScreen = ({ navigation }) => {
             try {
               console.log('=== Deleting Audio ===');
               console.log('Audio ID:', id);
-              
+
               const audioItem = audioItems.find(item => item.id === id);
-              
+
               // Delete from local storage
               const updatedItems = audioItems.filter(item => item.id !== id);
               setAudioItems(updatedItems);
               const key = getUserStorageKey('@audio_history', user.id);
               await AsyncStorage.setItem(key, JSON.stringify(updatedItems));
-              
+
               console.log('✅ Audio deleted locally. Remaining items:', updatedItems.length);
-              
+
               // Delete from backend if authenticated and backend_id exists
               if (token && user && audioItem?.backend_id) {
                 try {
@@ -81,7 +81,7 @@ const PastAudioListScreen = ({ navigation }) => {
               } else if (!audioItem?.backend_id) {
                 console.log('⚠️ No backend_id found, audio was only local');
               }
-              
+
               if (playingId === id) {
                 await stopAudio();
                 setPlayingId(null);
@@ -111,7 +111,7 @@ const PastAudioListScreen = ({ navigation }) => {
         if (playingId) {
           await stopAudio();
         }
-        
+
         // Play new audio
         setPlayingId(item.id);
         const result = await playAudio(item.audioUri, () => {
@@ -140,7 +140,7 @@ const PastAudioListScreen = ({ navigation }) => {
       language: item.language,
       avatarName: item.avatarName,
     });
-    
+
     // Navigate back to TTS screen with this audio's parameters
     navigation.navigate('Dashboard', {
       loadAudio: item,
@@ -149,28 +149,32 @@ const PastAudioListScreen = ({ navigation }) => {
 
   const formatDate = (isoDate) => {
     const date = new Date(isoDate);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
     });
   };
 
   return (
     <View style={styles.container}>
-      <Header
-        title="My Audio Library"
-        showBackButton={true}
-        onBackPress={() => navigation.goBack()}
-      />
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>My Audio Library</Text>
+      </View>
 
       {isLoading ? (
-        <ScrollView 
-          style={styles.scrollView} 
+        <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.content}
         >
-          <SkeletonList 
-            count={3} 
+          <SkeletonList
+            count={3}
             renderSkeleton={() => <AudioCardSkeleton />}
             itemStyle={{ marginBottom: 16 }}
           />
@@ -182,8 +186,8 @@ const PastAudioListScreen = ({ navigation }) => {
           <Text style={styles.emptyText}>Create your first audio in Text To Speech mode</Text>
         </View>
       ) : (
-        <ScrollView 
-          style={styles.scrollView} 
+        <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.content}
           refreshControl={
             <RefreshControl
@@ -200,9 +204,20 @@ const PastAudioListScreen = ({ navigation }) => {
                 <View style={styles.audioInfo}>
                   <Text style={styles.audioTitle}>{item.name}</Text>
                   <Text style={styles.audioDate}>Created: {formatDate(item.createdAt)}</Text>
-                  <Text style={styles.audioSubtitle}>
-                    Avatar: {item.avatarName} • Voice: {item.voice}
-                  </Text>
+                  <View style={styles.badgeContainer}>
+                    <View style={styles.avatarBadge}>
+                      <Ionicons name="person-circle-outline" size={14} color="#6B21A8" />
+                      <Text style={styles.avatarBadgeText}>
+                        {item.avatarName}
+                      </Text>
+                    </View>
+                    <View style={styles.voiceBadge}>
+                      <Ionicons name="mic-outline" size={14} color="#047857" />
+                      <Text style={styles.voiceBadgeText}>
+                        {item.voice}
+                      </Text>
+                    </View>
+                  </View>
                   {item.text && (
                     <Text style={styles.audioText} numberOfLines={2}>
                       {item.text}
@@ -210,30 +225,30 @@ const PastAudioListScreen = ({ navigation }) => {
                   )}
                 </View>
                 <View style={styles.audioIcon}>
-                  <Ionicons 
-                    name={playingId === item.id ? "pause-circle" : "musical-notes"} 
-                    size={32} 
-                    color={playingId === item.id ? "#22c55e" : COLORS.primary} 
+                  <Ionicons
+                    name={playingId === item.id ? "pause-circle" : "musical-notes"}
+                    size={32}
+                    color={playingId === item.id ? "#22c55e" : COLORS.primary}
                   />
                 </View>
               </View>
               <View style={styles.cardActions}>
-                <Button 
+                <Button
                   title={playingId === item.id ? 'Stop' : 'Play'}
-                  variant="primary" 
+                  variant="primary"
                   style={styles.actionBtn}
                   onPress={() => handlePlay(item)}
                   icon={
-                    <Ionicons 
-                      name={playingId === item.id ? "stop-circle" : "play-circle"} 
-                      size={20} 
-                      color={COLORS.white} 
+                    <Ionicons
+                      name={playingId === item.id ? "stop-circle" : "play-circle"}
+                      size={20}
+                      color={COLORS.white}
                     />
                   }
                 />
-                <Button 
-                  title="Use" 
-                  variant="secondary" 
+                <Button
+                  title="Use"
+                  variant="secondary"
                   style={styles.actionBtn}
                   onPress={() => handleUse(item)}
                   icon={<Ionicons name="create" size={20} color={COLORS.textLight} />}
@@ -255,9 +270,33 @@ const PastAudioListScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.backgroundDark 
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB'
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: '#F9FAFB',
+    paddingTop: 32, // Increased top padding for status bar spacing
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginLeft: 16,
+  },
+  backButton: {
+    padding: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   emptyState: {
     flex: 1,
@@ -268,79 +307,126 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: SIZES.h3,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937',
     marginTop: 16,
   },
   emptyText: {
     fontSize: SIZES.body2,
-    color: COLORS.gray[400],
+    color: '#6B7280',
     textAlign: 'center',
     marginTop: 8,
   },
-  scrollView: { 
-    flex: 1 
+  scrollView: {
+    flex: 1
   },
-  content: { 
-    padding: SIZES.padding, 
-    gap: 16 
+  content: {
+    padding: 24,
+    paddingTop: 8,
+    gap: 16
   },
-  audioCard: { 
-    backgroundColor: 'rgba(255,255,255,0.05)', 
-    borderRadius: 12, 
-    padding: 16, 
-    gap: 16 
+  audioCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  cardHeader: { 
-    flexDirection: 'row', 
-    gap: 16, 
-    alignItems: 'flex-start' 
+  cardHeader: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'flex-start'
   },
-  audioInfo: { 
-    flex: 1 
+  audioInfo: {
+    flex: 1
   },
-  audioTitle: { 
-    fontSize: SIZES.body1, 
-    fontWeight: 'bold', 
-    color: COLORS.textLight 
+  audioTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937'
   },
-  audioDate: { 
-    fontSize: SIZES.body3, 
-    color: COLORS.gray[400], 
-    marginTop: 4 
+  audioDate: {
+    fontSize: 12,
+    color: '#4B5563', // Darker gray
+    marginTop: 4
   },
-  audioSubtitle: { 
-    fontSize: SIZES.body4, 
-    color: COLORS.gray[500], 
-    marginTop: 2 
+  badgeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  avatarBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF', // Light Purple
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  avatarBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B21A8', // Dark Purple
+  },
+  voiceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5', // Light Green/Teal
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  voiceBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#047857', // Dark Green
   },
   audioText: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[300],
+    fontSize: 14,
+    color: '#1F2937', // Nearly black
     marginTop: 8,
     lineHeight: 20,
+    fontStyle: 'italic',
   },
-  audioIcon: { 
-    width: 64, 
-    height: 64, 
-    backgroundColor: 'rgba(19, 127, 236, 0.1)', 
-    borderRadius: 8, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  audioIcon: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#E0F2F1',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#B2DFDB',
   },
-  cardActions: { 
-    flexDirection: 'row', 
-    gap: 8 
+  cardActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
   },
-  actionBtn: { 
-    flex: 1 
+  actionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    height: 48,
   },
   deleteButton: {
     width: 48,
     height: 48,
-    borderRadius: SIZES.radius,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: '#FECACA',
     justifyContent: 'center',
     alignItems: 'center',
   },

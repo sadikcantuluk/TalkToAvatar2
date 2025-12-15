@@ -22,7 +22,7 @@ import { compressImageForAPI } from '../utils/imageCompression';
 const CreateCustomAvatarScreen = ({ navigation }) => {
   const { token, user } = useAuth();
   const { error: showError, warning, info, success } = useToast();
-  
+
   const [step, setStep] = useState('create'); // 'create', 'loading', 'confirmation'
   const [selectedImage, setSelectedImage] = useState(null);
   const [avatarName, setAvatarName] = useState('');
@@ -60,7 +60,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       console.log('=== Creating Custom Avatar ===');
       console.log('Avatar Name:', avatarName);
       console.log('Selected Image URI:', selectedImage);
-      
+
       // Show loading
       setStep('loading');
 
@@ -76,8 +76,8 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
 
       if (result.success) {
         // Check if we have a generated image or using fallback
-        if (result.generatedImages && result.generatedImages.length > 0 && 
-            result.generatedImages[0].image.imageBytes) {
+        if (result.generatedImages && result.generatedImages.length > 0 &&
+          result.generatedImages[0].image.imageBytes) {
           // Use the AI-generated image
           console.log('Using AI-generated image');
           const generatedImageBase64 = result.generatedImages[0].image.imageBytes;
@@ -113,7 +113,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       console.log('=== Accepting Custom Avatar ===');
       console.log('Avatar Name:', avatarName);
       console.log('Generated Avatar Type:', generatedAvatar.startsWith('data:image') ? 'base64' : 'file');
-      
+
       // Request media library permissions
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
@@ -128,27 +128,27 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       // If the image is base64, save it to gallery first
       if (generatedAvatar.startsWith('data:image')) {
         console.log('Saving base64 image to file system...');
-        
+
         // Create a file from base64
         const filename = `avatar_${avatarName.replace(/\s+/g, '_')}_${Date.now()}.jpg`;
         const fileUri = `${FileSystem.documentDirectory}${filename}`;
         console.log('File URI:', fileUri);
-        
+
         // Extract base64 data
         const base64Data = generatedAvatar.split(',')[1];
         console.log('Base64 data length:', base64Data.length);
-        
+
         // Write to file
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: FileSystem.EncodingType.Base64,
         });
         console.log('File written successfully');
-        
+
         // Save to media library
         const asset = await MediaLibrary.createAssetAsync(fileUri);
         savedImageUri = asset.uri;
         console.log('Saved to media library:', savedImageUri);
-        
+
         // Clean up temp file
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
         console.log('Temp file cleaned up');
@@ -160,12 +160,12 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
         description: 'Custom avatar',
         image: { uri: savedImageUri },
       };
-      
+
       console.log('New Avatar Object:', JSON.stringify(newAvatar));
-      
+
       // Show loading message for backend save
       info('Creating your avatar... This may take a moment.');
-      
+
       // Save to backend first, then navigate
       if (token && user) {
         try {
@@ -175,35 +175,35 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
             avatar_name: avatarName,
             local_uri: savedImageUri,
           };
-          
+
           console.log('📤 Backend data:', { avatar_name: avatarName, local_uri: savedImageUri.substring(0, 50) + '...' });
-          
+
           const response = await customAvatarsAPI.create(token, backendData);
           const backendId = response.avatar?.id || response.custom_avatar?.id;
           console.log('✅ Custom avatar saved to backend with ID:', backendId);
-          
+
           // Add backend_id to avatar object
           newAvatar.backend_id = backendId;
           console.log('✅ Backend ID added to avatar:', backendId);
-          
+
           // Show success toast after backend save
           success('Custom avatar created successfully!');
-          
+
           console.log('Navigating to SelectAvatar...');
-          
+
           // Navigate back to Select Avatar with new custom avatar
           navigation.navigate('SelectAvatar', {
             customAvatar: newAvatar,
           });
         } catch (backendError) {
           console.error('⚠️ Backend save failed, saving locally only:', backendError);
-          
+
           // Still save locally and navigate even if backend fails
           newAvatar.backend_id = null;
           success('Custom avatar created locally!');
-          
+
           console.log('Navigating to SelectAvatar...');
-          
+
           // Navigate back to Select Avatar with new custom avatar
           navigation.navigate('SelectAvatar', {
             customAvatar: newAvatar,
@@ -213,9 +213,9 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
         // No user/token, save locally only
         newAvatar.backend_id = null;
         success('Custom avatar created locally!');
-        
+
         console.log('Navigating to SelectAvatar...');
-        
+
         // Navigate back to Select Avatar with new custom avatar
         navigation.navigate('SelectAvatar', {
           customAvatar: newAvatar,
@@ -243,9 +243,12 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
           title="Create Your Avatar"
           showBackButton={true}
           onBackPress={() => navigation.goBack()}
+          containerStyle={{ backgroundColor: 'transparent' }}
+          titleColor="#1F2937"
+          iconColor="#1F2937"
         />
 
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -282,19 +285,18 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
             value={avatarName}
             onChangeText={setAvatarName}
             containerStyle={styles.inputContainer}
+            inputStyle={{ color: '#1F2937' }}
+            labelColor="#1F2937"
+            placeholderTextColor="#6B7280"
           />
-        </ScrollView>
-
-        {/* Create Button */}
-        <View style={styles.footer}>
           <Button
             title="Create"
             onPress={handleCreate}
             variant="primary"
             disabled={!selectedImage || !avatarName.trim()}
-            style={styles.createButton}
+            style={[styles.createButton, { marginTop: 24 }]}
           />
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -317,7 +319,12 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
   // Confirmation View
   return (
     <View style={styles.container}>
-      <Header title="Here's Your Avatar!" />
+      <Header
+        title="Here's Your Avatar!"
+        containerStyle={{ backgroundColor: 'transparent' }}
+        titleColor="#1F2937"
+        iconColor="#1F2937"
+      />
 
       <View style={styles.confirmationContent}>
         {/* Avatar Preview */}
@@ -356,7 +363,8 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: '#F9FAFB', // Light Background
+    paddingTop: 30, // Spacing for header
   },
   scrollView: {
     flex: 1,
@@ -369,7 +377,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: COLORS.gray[700],
+    borderColor: '#D1D5DB', // Light Gray Border
+    backgroundColor: '#FFFFFF',
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
@@ -386,12 +395,12 @@ const styles = StyleSheet.create({
   uploadTitle: {
     fontSize: SIZES.h4,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937', // Dark Text
     marginBottom: 8,
   },
   uploadDescription: {
     fontSize: SIZES.body3,
-    color: COLORS.gray[400],
+    color: '#6B7280', // Gray 500
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -403,15 +412,17 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: SIZES.padding,
-    backgroundColor: 'rgba(16, 25, 34, 0.8)',
+    backgroundColor: '#FFFFFF',
     gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   createButton: {
     width: '100%',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: 'rgba(16, 25, 34, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -426,11 +437,11 @@ const styles = StyleSheet.create({
   loadingTitle: {
     fontSize: SIZES.h4,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   loadingDescription: {
     fontSize: SIZES.body2,
-    color: COLORS.gray[300],
+    color: '#6B7280',
   },
   confirmationContent: {
     flex: 1,
@@ -452,7 +463,7 @@ const styles = StyleSheet.create({
   avatarNamePreview: {
     fontSize: SIZES.h2,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937',
     marginTop: 16,
   },
   actionButton: {

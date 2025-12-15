@@ -54,9 +54,9 @@ const TextToSpeechScreen = ({ navigation, route }) => {
   const [currentAudioUri, setCurrentAudioUri] = useState(null);
   const [textHistory, setTextHistory] = useState([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
-  
+
   const recordingRef = useRef(null);
-  
+
   // Avatar animation
   const avatarScale = useRef(new Animated.Value(1)).current;
   const avatarOpacity = useRef(new Animated.Value(1)).current;
@@ -84,12 +84,12 @@ const TextToSpeechScreen = ({ navigation, route }) => {
         console.log('=== Avatar Changed in TTS ===');
         console.log('New avatar:', route.params.selectedAvatar.name);
         console.log('Preserving state: textInput, outputName, voice, language, audioUri');
-        
+
         setSelectedAvatar(route.params.selectedAvatar);
         setSelectedDisplayMode('avatar'); // Switch to avatar display mode
-        
+
         console.log('✅ Avatar updated, all state preserved');
-        
+
         // Clear the param to prevent re-applying on next focus
         navigation.setParams({ selectedAvatar: undefined });
       }
@@ -101,7 +101,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     if (isPlaying && selectedDisplayMode === 'avatar') {
       console.log('=== Starting Avatar Animation ===');
       console.log('Avatar speaking animation activated with mouth movements');
-      
+
       // Create a pulsing animation for avatar (scale and opacity)
       pulseAnimationRef.current = Animated.loop(
         Animated.sequence([
@@ -131,7 +131,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           ]),
         ])
       );
-      
+
       // Create a faster pulsing animation for speaking dot
       dotAnimationRef.current = Animated.loop(
         Animated.sequence([
@@ -147,7 +147,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           }),
         ])
       );
-      
+
       // Create a mouth movement animation (faster, more intense)
       mouthAnimationRef.current = Animated.loop(
         Animated.sequence([
@@ -207,29 +207,29 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           ]),
         ])
       );
-      
+
       pulseAnimationRef.current.start();
       dotAnimationRef.current.start();
       mouthAnimationRef.current.start();
       console.log('✅ All animations started: pulse, dot, and mouth movements');
     } else {
       console.log('=== Stopping Avatar Animation ===');
-      
+
       if (pulseAnimationRef.current) {
         pulseAnimationRef.current.stop();
         pulseAnimationRef.current = null;
       }
-      
+
       if (dotAnimationRef.current) {
         dotAnimationRef.current.stop();
         dotAnimationRef.current = null;
       }
-      
+
       if (mouthAnimationRef.current) {
         mouthAnimationRef.current.stop();
         mouthAnimationRef.current = null;
       }
-      
+
       // Reset to default values
       Animated.parallel([
         Animated.timing(avatarScale, {
@@ -258,7 +258,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           useNativeDriver: true,
         }),
       ]).start();
-      
+
       console.log('✅ All animations stopped and reset');
     }
   }, [isPlaying, selectedDisplayMode]);
@@ -275,13 +275,13 @@ const TextToSpeechScreen = ({ navigation, route }) => {
         console.log('Voice:', audio.voice);
         console.log('Language:', audio.language);
         console.log('Avatar Name:', audio.avatarName);
-        
+
         // Load all parameters
         setOutputName(audio.name || '');
         setTextInput(audio.text || '');
         setSelectedVoice(audio.voice || 'nova');
         setSelectedLanguage(audio.language || 'en');
-        
+
         // Load avatar based on avatarName
         if (audio.avatarName) {
           if (audio.avatarName.toLowerCase() === 'yusuf') {
@@ -305,10 +305,10 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               if (savedAvatars) {
                 const customAvatars = JSON.parse(savedAvatars);
                 console.log('Found custom avatars:', customAvatars.length);
-                
+
                 // Find the avatar by name
                 const foundAvatar = customAvatars.find(a => a.name === audio.avatarName);
-                
+
                 if (foundAvatar) {
                   console.log('✅ Custom avatar found:', foundAvatar.name);
                   console.log('Avatar ID:', foundAvatar.id);
@@ -332,12 +332,12 @@ const TextToSpeechScreen = ({ navigation, route }) => {
             }
           }
         }
-        
+
         // Reset audio state to force re-creation
         setCurrentAudioUri(null);
         setIsPlaying(false);
         setCurrentHistoryIndex(-1);
-        
+
         console.log('All parameters loaded successfully');
         console.log('Current state:', {
           outputName: audio.name,
@@ -346,12 +346,12 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           language: audio.language,
           avatar: audio.avatarName,
         });
-        
+
         // Clear the param
         navigation.setParams({ loadAudio: undefined });
       }
     };
-    
+
     loadAudioParameters();
   }, [route.params?.loadAudio]);
 
@@ -361,7 +361,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       setTextHistory([]);
       return;
     }
-    
+
     try {
       console.log('=== Loading Text History ===');
       const key = getUserStorageKey('@text_history', user.id);
@@ -383,7 +383,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
   // Save text to history
   const saveTextToHistory = async (text) => {
     if (!user?.id) return;
-    
+
     try {
       console.log('=== Saving Text to History ===');
       const newHistory = [text, ...textHistory.filter(t => t !== text)].slice(0, 20); // Keep last 20
@@ -400,7 +400,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
   const saveAudioToHistory = async (audioData) => {
     try {
       console.log('=== Saving Audio to History ===');
-      
+
       const newAudio = {
         id: Date.now().toString(),
         name: outputName || `Audio ${audioHistory.length + 1}`,
@@ -412,7 +412,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
         avatarName: selectedAvatar.name,
         createdAt: new Date().toISOString(),
       };
-      
+
       // Save to local AsyncStorage (fast - blocks UI)
       const key = getUserStorageKey('@audio_history', user.id);
       const saved = await AsyncStorage.getItem(key);
@@ -420,10 +420,10 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       const newHistory = [newAudio, ...history];
       await AsyncStorage.setItem(key, JSON.stringify(newHistory));
       console.log('✅ Audio saved to AsyncStorage. Total audios:', newHistory.length);
-      
+
       // Show success toast immediately after local save (instant feedback)
       success('Audio created and saved successfully!');
-      
+
       // Save to backend/Supabase asynchronously (non-blocking)
       if (token && user) {
         // Use Promise.resolve().then() to defer backend save
@@ -439,10 +439,10 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               language_code: selectedLanguage,
               avatar_name: selectedAvatar.name,
             };
-            
+
             const response = await audiosAPI.create(token, backendData);
             console.log('✅ Audio saved to backend:', response.audio.id);
-            
+
             // Update local storage with backend_id for future deletion
             const key = getUserStorageKey('@audio_history', user.id);
             const saved = await AsyncStorage.getItem(key);
@@ -486,8 +486,8 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     console.log('- voice:', selectedVoice);
     console.log('- language:', selectedLanguage);
     console.log('- audioUri:', currentAudioUri ? 'Available' : 'None');
-    
-    navigation.navigate('SelectAvatar', { 
+
+    navigation.navigate('SelectAvatar', {
       returnScreen: 'Dashboard',
       preserveState: true // Indicate state should be preserved
     });
@@ -555,7 +555,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       if (result.success) {
         console.log('Audio created successfully');
         setCurrentAudioUri(result.audioUri);
-        
+
         // Save to history
         await saveTextToHistory(textInput);
         await saveAudioToHistory(result);
@@ -593,7 +593,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
           console.log('=== Audio playback finished, stopping GIF ===');
           setIsPlaying(false);
         });
-        
+
         if (!result.success) {
           setIsPlaying(false);
           Alert.alert('Error', 'Failed to play audio');
@@ -611,14 +611,14 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       if (isRecording) {
         console.log('Stopping recording...');
         setIsRecording(false);
-        
+
         if (recordingRef.current) {
           const result = await stopRecording(recordingRef.current);
-          
+
           if (result.success) {
             console.log('Transcribing audio...');
             const transcription = await transcribeAudio(result.uri, selectedLanguage);
-            
+
             if (transcription.success) {
               console.log('Transcription successful');
               setTextInput(transcription.text);
@@ -627,13 +627,13 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               Alert.alert('Error', 'Failed to transcribe audio');
             }
           }
-          
+
           recordingRef.current = null;
         }
       } else {
         console.log('Starting recording...');
         const result = await startRecording();
-        
+
         if (result.success) {
           recordingRef.current = result.recording;
           setIsRecording(true);
@@ -654,7 +654,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     if (textHistory.length === 0) return;
 
     let newIndex = currentHistoryIndex;
-    
+
     if (direction === 'prev') {
       newIndex = currentHistoryIndex < textHistory.length - 1 ? currentHistoryIndex + 1 : currentHistoryIndex;
     } else {
@@ -678,10 +678,11 @@ const TextToSpeechScreen = ({ navigation, route }) => {
   };
 
   return (
-    <DashboardLayout 
-      currentMode="tts" 
+    <DashboardLayout
+      currentMode="tts"
       onModeChange={handleModeChange}
       navigation={navigation}
+      showBackButton={true}
     >
       {/* Main Content */}
       <ScrollView
@@ -691,7 +692,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
       >
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
-          <Animated.View 
+          <Animated.View
             style={[
               styles.avatarContainer,
               selectedDisplayMode === 'avatar' && {
@@ -743,7 +744,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
                 resizeMode="cover"
               />
             )}
-            
+
             {/* Mouth movement overlay - only for avatar mode */}
             {isPlaying && selectedDisplayMode === 'avatar' && (
               <Animated.View
@@ -756,21 +757,21 @@ const TextToSpeechScreen = ({ navigation, route }) => {
                 ]}
               />
             )}
-            
+
             {isPlaying && (
               <View style={styles.speakingIndicator}>
-                <Animated.View 
+                <Animated.View
                   style={[
                     styles.speakingDot,
                     {
                       transform: [{ scale: speakingDotScale }],
                     }
-                  ]} 
+                  ]}
                 />
                 <Text style={styles.speakingText}>Speaking...</Text>
               </View>
             )}
-            
+
             {/* Play button on avatar (top right) */}
             {currentAudioUri && (
               <TouchableOpacity
@@ -778,15 +779,15 @@ const TextToSpeechScreen = ({ navigation, route }) => {
                 onPress={handlePlayPause}
                 activeOpacity={0.7}
               >
-                <Ionicons 
-                  name={isPlaying ? "pause" : "play"} 
-                  size={24} 
-                  color={COLORS.white} 
+                <Ionicons
+                  name={isPlaying ? "pause" : "play"}
+                  size={24}
+                  color={COLORS.white}
                 />
               </TouchableOpacity>
             )}
           </Animated.View>
-          
+
           {/* Selection Buttons Row */}
           <View style={styles.selectionButtonsRow}>
             <TouchableOpacity
@@ -797,10 +798,10 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               onPress={handleGifSelect}
               activeOpacity={0.7}
             >
-              <Ionicons 
-                name="film" 
-                size={18} 
-                color={selectedDisplayMode === 'gif' ? COLORS.primary : COLORS.white} 
+              <Ionicons
+                name="film"
+                size={18}
+                color={selectedDisplayMode === 'gif' ? COLORS.primary : '#6B7280'}
               />
               <Text style={[
                 styles.modeSelectText,
@@ -809,7 +810,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
                 Select GIF
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[
                 styles.modeSelectButton,
@@ -821,10 +822,10 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               }}
               activeOpacity={0.7}
             >
-              <Ionicons 
-                name="swap-horizontal" 
-                size={18} 
-                color={selectedDisplayMode === 'avatar' ? COLORS.primary : COLORS.white} 
+              <Ionicons
+                name="swap-horizontal"
+                size={18}
+                color={selectedDisplayMode === 'avatar' ? COLORS.primary : '#6B7280'}
               />
               <Text style={[
                 styles.modeSelectText,
@@ -847,6 +848,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
             onChangeText={setOutputName}
             containerStyle={styles.inputContainerOverride}
             inputStyle={styles.inputStyleOverride}
+            placeholderTextColor="#9CA3AF"
           />
 
           <View>
@@ -876,15 +878,16 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               maxLength={500}
               containerStyle={styles.inputContainerOverride}
               inputStyle={styles.inputStyleOverride}
+              placeholderTextColor="#9CA3AF"
               rightIcon={
                 <View style={styles.micButtonContainer}>
                   {isRecording && (
                     <View style={styles.recordingIndicator} />
                   )}
-                  <Ionicons 
-                    name={isRecording ? "stop-circle" : "mic"} 
-                    size={24} 
-                    color={isRecording ? "#ef4444" : "rgba(255,255,255,0.6)"} 
+                  <Ionicons
+                    name={isRecording ? "stop-circle" : "mic"}
+                    size={24}
+                    color={isRecording ? "#ef4444" : COLORS.primary}
                   />
                 </View>
               }
@@ -892,52 +895,9 @@ const TextToSpeechScreen = ({ navigation, route }) => {
             />
           </View>
 
-          {/* Navigation Arrows */}
-          <View style={styles.navigationRow}>
-            <View style={styles.arrowButtons}>
-              <TouchableOpacity 
-                style={[
-                  styles.arrowButton,
-                  (textHistory.length === 0 || currentHistoryIndex >= textHistory.length - 1) && styles.arrowButtonDisabled
-                ]}
-                onPress={() => handleNavigateHistory('prev')}
-                disabled={textHistory.length === 0 || currentHistoryIndex >= textHistory.length - 1}
-              >
-                <Ionicons 
-                  name="chevron-back" 
-                  size={20} 
-                  color={
-                    textHistory.length === 0 || currentHistoryIndex >= textHistory.length - 1
-                      ? "rgba(255,255,255,0.2)"
-                      : "rgba(255,255,255,0.6)"
-                  } 
-                />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.arrowButton,
-                  (textHistory.length === 0 || currentHistoryIndex <= 0) && styles.arrowButtonDisabled
-                ]}
-                onPress={() => handleNavigateHistory('next')}
-                disabled={textHistory.length === 0 || currentHistoryIndex <= 0}
-              >
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={20} 
-                  color={
-                    textHistory.length === 0 || currentHistoryIndex <= 0
-                      ? "rgba(255,255,255,0.2)"
-                      : "rgba(255,255,255,0.6)"
-                  } 
-                />
-              </TouchableOpacity>
-            </View>
-            {textHistory.length > 0 && currentHistoryIndex >= 0 && (
-              <Text style={styles.historyIndicator}>
-                {currentHistoryIndex + 1} / {textHistory.length}
-              </Text>
-            )}
-          </View>
+          {/* Navigation Arrows Removed as per request */}
+          {/* Navigation Arrows Removed as per request */}
+          <View style={{ marginBottom: 4 }} />
         </View>
 
         {/* Voice and Language Selection */}
@@ -948,6 +908,9 @@ const TextToSpeechScreen = ({ navigation, route }) => {
               <VoiceSelector
                 selectedVoice={selectedVoice}
                 onVoiceChange={setSelectedVoice}
+                textColor="#1F2937"
+                labelColor="#6B7280"
+                style={styles.selectionButton}
               />
             </View>
 
@@ -957,6 +920,8 @@ const TextToSpeechScreen = ({ navigation, route }) => {
                 selectedLanguage={selectedLanguage}
                 onLanguageChange={setSelectedLanguage}
                 showFlag={false}
+                textColor="#1F2937"
+                style={styles.selectionButton}
               />
             </View>
           </View>
@@ -965,26 +930,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
         {/* Create Button Section */}
         <View style={styles.createSection}>
           <View style={styles.actionButtonsContainer}>
-            {!currentAudioUri ? (
-              <TouchableOpacity
-                style={[
-                  styles.createButton,
-                  isCreating && styles.createButtonLoading,
-                ]}
-                onPress={handleCreate}
-                activeOpacity={0.8}
-                disabled={isCreating || !textInput.trim()}
-              >
-                {isCreating ? (
-                  <ActivityIndicator size="large" color={COLORS.backgroundDark} />
-                ) : (
-                  <>
-                    <Ionicons name="add-circle" size={32} color={COLORS.backgroundDark} />
-                    <Text style={styles.createButtonText}>Create</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            ) : (
+            {currentAudioUri && (
               <>
                 <TouchableOpacity
                   style={styles.recreateButton}
@@ -997,39 +943,47 @@ const TextToSpeechScreen = ({ navigation, route }) => {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="refresh" size={24} color={COLORS.primary} />
+                  <Ionicons name="refresh" size={20} color={COLORS.primary} />
                   <Text style={styles.recreateButtonText}>Recreate</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.createButton,
-                    styles.createButtonActive,
-                  ]}
+
+                <Button
+                  title={isPlaying ? 'Playing...' : 'Play'}
+                  variant="primary"
+                  style={{ flex: 1, backgroundColor: isPlaying ? '#22c55e' : COLORS.primary }}
                   onPress={handlePlayPause}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons 
-                    name={isPlaying ? "pause-circle" : "play-circle"} 
-                    size={48} 
-                    color={COLORS.backgroundDark} 
-                  />
-                  <Text style={[styles.createButtonText, styles.createButtonTextActive]}>
-                    {isPlaying ? 'Playing' : 'Play'}
-                  </Text>
-                </TouchableOpacity>
+                  icon={
+                    <Ionicons
+                      name={isPlaying ? "pause-circle" : "play-circle"}
+                      size={20}
+                      color={COLORS.white}
+                    />
+                  }
+                />
               </>
             )}
           </View>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.pastAudioButton}
             onPress={handlePastAudio}
           >
-            <Ionicons name="time-outline" size={20} color="rgba(255,255,255,0.6)" />
+            <Ionicons name="time-outline" size={20} color={COLORS.gray[600]} />
             <Text style={styles.pastAudioText}>Past Audio</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Primary Create Action */}
+        {!currentAudioUri && (
+          <Button
+            title={isCreating ? "Creating..." : "Create Audio"}
+            onPress={handleCreate}
+            variant="primary"
+            style={styles.mainCreateButton}
+            disabled={isCreating || !textInput.trim()}
+            loading={isCreating}
+          />
+        )}
       </ScrollView>
     </DashboardLayout>
   );
@@ -1048,7 +1002,7 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     width: '100%',
-    aspectRatio: 4/3,
+    aspectRatio: 4 / 3,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: COLORS.gray[800],
@@ -1130,10 +1084,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   modeSelectButtonActive: {
     backgroundColor: 'rgba(19, 127, 236, 0.15)',
@@ -1142,7 +1096,7 @@ const styles = StyleSheet.create({
   modeSelectText: {
     fontSize: SIZES.body4,
     fontWeight: '600',
-    color: COLORS.white,
+    color: '#1F2937', // Dark Text for visibility on white background
   },
   modeSelectTextActive: {
     color: COLORS.primary,
@@ -1167,7 +1121,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   inputSection: {
-    marginBottom: 32,
+    marginBottom: 12,
   },
   labelContainer: {
     marginBottom: 8,
@@ -1181,15 +1135,15 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: SIZES.body3,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.7)',
+    color: '#374151', // Dark Gray
   },
   inputContainerOverride: {
     marginBottom: SIZES.padding,
   },
   inputStyleOverride: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    color: COLORS.textLight,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    color: '#1F2937', // Dark Text
   },
   clearButton: {
     flexDirection: 'row',
@@ -1232,7 +1186,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#E5E7EB', // Light Gray
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1244,7 +1198,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray[400],
   },
   selectionSection: {
-    marginBottom: 32,
+    marginBottom: 12,
   },
   selectionRow: {
     flexDirection: 'row',
@@ -1256,7 +1210,7 @@ const styles = StyleSheet.create({
   selectionLabel: {
     fontSize: SIZES.body3,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
+    color: '#374151', // Dark Gray
     marginBottom: 8,
   },
   selectionButton: {
@@ -1265,21 +1219,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     height: 48,
     paddingHorizontal: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: '#E5E7EB',
     borderRadius: SIZES.radius,
   },
   selectionButtonText: {
     fontSize: SIZES.body1,
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   createSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
   },
   pastAudioButton: {
     flexDirection: 'row',
@@ -1293,7 +1244,7 @@ const styles = StyleSheet.create({
   pastAudioText: {
     fontSize: SIZES.body3,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
+    color: '#374151',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
@@ -1333,6 +1284,12 @@ const styles = StyleSheet.create({
   },
   createButtonTextActive: {
     fontSize: SIZES.body3,
+  },
+  mainCreateButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#2D7F83',
   },
   recreateButton: {
     flexDirection: 'column',

@@ -41,7 +41,7 @@ const SplashScreen = ({ navigation }) => {
     // Letter-by-letter reveal animation
     let currentIndex = 0;
     let navigationTimer = null;
-    
+
     const typingInterval = setInterval(() => {
       if (currentIndex < LOGO_TEXT.length) {
         setDisplayedText(LOGO_TEXT.substring(0, currentIndex + 1));
@@ -49,21 +49,21 @@ const SplashScreen = ({ navigation }) => {
       } else {
         clearInterval(typingInterval);
         cursorAnimation.stop();
-        
+
         // Hide cursor after typing completes
         Animated.timing(cursorOpacity, {
           toValue: 0,
           duration: 300,
           useNativeDriver: true,
         }).start();
-        
+
         // After typing animation completes, wait a bit then navigate
         navigationTimer = setTimeout(() => {
           if (!loading) {
             if (isAuthenticated()) {
-              navigation.replace('Welcome');
+              navigation.replace('Dashboard');
             } else {
-              navigation.replace('Login');
+              navigation.replace('Welcome');
             }
           }
         }, 800); // Short pause after animation
@@ -80,7 +80,7 @@ const SplashScreen = ({ navigation }) => {
   }, [loading, isAuthenticated, navigation, cursorOpacity]);
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         styles.container,
         {

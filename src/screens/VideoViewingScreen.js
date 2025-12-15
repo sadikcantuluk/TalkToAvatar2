@@ -9,7 +9,7 @@ import { Button, Header } from '../components';
 const VideoViewingScreen = ({ navigation, route }) => {
   const video = route?.params?.video;
   const videoRef = useRef(null);
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -39,7 +39,7 @@ const VideoViewingScreen = ({ navigation, route }) => {
     console.log('=== Toggle Play/Pause ===');
     console.log('Current playing state:', isPlaying);
     console.log('Video status:', videoStatus);
-    
+
     if (!videoRef.current) return;
 
     try {
@@ -66,7 +66,7 @@ const VideoViewingScreen = ({ navigation, route }) => {
 
   const handleExport = async () => {
     console.log('=== Exporting Video to Gallery ===');
-    
+
     if (!video?.videoUri) {
       Alert.alert('Error', 'Video file not found');
       return;
@@ -78,7 +78,7 @@ const VideoViewingScreen = ({ navigation, route }) => {
       // Request permissions
       console.log('Requesting media library permissions...');
       const { status } = await MediaLibrary.requestPermissionsAsync();
-      
+
       if (status !== 'granted') {
         console.log('Permission denied');
         Alert.alert('Permission Required', 'Please grant permission to save videos to your gallery');
@@ -87,7 +87,7 @@ const VideoViewingScreen = ({ navigation, route }) => {
       }
 
       console.log('Permission granted, saving video...');
-      
+
       // Save to media library
       const asset = await MediaLibrary.createAssetAsync(video.videoUri);
       console.log('Asset created:', asset.id);
@@ -105,7 +105,7 @@ const VideoViewingScreen = ({ navigation, route }) => {
       setExporting(false);
       setSaved(true);
       console.log('✅ Video saved to gallery successfully!');
-      
+
       Alert.alert('Success!', 'Video saved to your gallery');
     } catch (error) {
       console.error('=== Export Error ===');
@@ -129,11 +129,13 @@ const VideoViewingScreen = ({ navigation, route }) => {
         title=""
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
+        containerStyle={{ backgroundColor: 'transparent' }}
+        iconColor="#1F2937"
       />
 
       <View style={styles.content}>
         <Text style={styles.title}>{video?.name || 'Video'}</Text>
-        
+
         <View style={styles.videoContainer}>
           {isLoading && (
             <View style={styles.loadingContainer}>
@@ -141,7 +143,7 @@ const VideoViewingScreen = ({ navigation, route }) => {
               <Text style={styles.loadingText}>Loading video...</Text>
             </View>
           )}
-          
+
           <Video
             ref={videoRef}
             source={{ uri: video?.videoUri || video?.videoUrl }}
@@ -167,7 +169,7 @@ const VideoViewingScreen = ({ navigation, route }) => {
           />
 
           {!isLoading && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.playOverlay}
               onPress={handlePlayPause}
               activeOpacity={1}
@@ -183,13 +185,13 @@ const VideoViewingScreen = ({ navigation, route }) => {
           {!isLoading && videoStatus.isLoaded && (
             <>
               <View style={styles.progressBar}>
-                <View 
+                <View
                   style={[
-                    styles.progress, 
-                    { 
-                      width: `${(videoStatus.positionMillis / videoStatus.durationMillis) * 100}%` 
+                    styles.progress,
+                    {
+                      width: `${(videoStatus.positionMillis / videoStatus.durationMillis) * 100}%`
                     }
-                  ]} 
+                  ]}
                 />
               </View>
               <View style={styles.timeLabels}>
@@ -203,63 +205,74 @@ const VideoViewingScreen = ({ navigation, route }) => {
             </>
           )}
         </View>
-      </View>
 
-      <View style={styles.footer}>
-        {!saved && !exporting && (
-          <Button 
-            title="Export to Gallery" 
-            onPress={handleExport} 
-            variant="primary"
-            icon={<Ionicons name="download" size={20} color={COLORS.white} />}
-          />
-        )}
+        <View style={styles.actionContainer}>
+          {!saved && !exporting && (
+            <Button
+              title="Export to Gallery"
+              onPress={handleExport}
+              variant="primary"
+              icon={<Ionicons name="download" size={20} color={COLORS.white} />}
+              style={styles.actionButton}
+            />
+          )}
 
-        {exporting && (
-          <View style={styles.exportingContainer}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.exportText}>Exporting to gallery...</Text>
-          </View>
-        )}
+          {exporting && (
+            <View style={styles.exportingContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.exportText}>Exporting to gallery...</Text>
+            </View>
+          )}
 
-        {saved && (
-          <Button 
-            title="Saved to Gallery!" 
-            variant="primary" 
-            style={styles.savedButton}
-            icon={<Ionicons name="checkmark-circle" size={24} color={COLORS.white} />}
-            disabled={true}
-          />
-        )}
+          {saved && (
+            <Button
+              title="Saved to Gallery!"
+              variant="primary"
+              style={styles.savedButton}
+              icon={<Ionicons name="checkmark-circle" size={24} color={COLORS.white} />}
+              disabled={true}
+            />
+          )}
+        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.backgroundDark 
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB', // Light Background
+    paddingTop: 30, // Spacing for header
   },
-  content: { 
-    flex: 1, 
+  content: {
+    flex: 1,
+    flex: 1,
     paddingHorizontal: SIZES.padding,
     paddingTop: 16,
+    justifyContent: 'center', // Center vertically
+    paddingBottom: 40,
   },
-  title: { 
-    fontSize: SIZES.h2, 
-    fontWeight: 'bold', 
-    color: COLORS.textLight, 
-    marginBottom: 16 
+  title: {
+    fontSize: SIZES.h2,
+    fontWeight: 'bold',
+    color: '#1F2937', // Dark Text
+    marginBottom: 24,
+    textAlign: 'center',
   },
-  videoContainer: { 
-    aspectRatio: 16/9, 
-    backgroundColor: COLORS.gray[900], 
-    borderRadius: 12, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  videoContainer: {
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   video: {
     width: '100%',
@@ -285,60 +298,69 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  playButton: { 
-    width: 64, 
-    height: 64, 
-    borderRadius: 32, 
-    backgroundColor: 'rgba(0,0,0,0.6)', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  playButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center'
   },
-  progressBar: { 
-    position: 'absolute', 
-    bottom: 40, 
-    left: 16, 
-    right: 16, 
-    height: 4, 
-    backgroundColor: 'rgba(255,255,255,0.3)', 
-    borderRadius: 2 
+  progressBar: {
+    position: 'absolute',
+    bottom: 40,
+    left: 16,
+    right: 16,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2
   },
-  progress: { 
-    height: '100%', 
-    backgroundColor: COLORS.primary, 
-    borderRadius: 2 
+  progress: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 2
   },
-  timeLabels: { 
-    position: 'absolute', 
-    bottom: 12, 
-    left: 16, 
-    right: 16, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between' 
+  timeLabels: {
+    position: 'absolute',
+    bottom: 12,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between'
   },
-  timeText: { 
-    fontSize: SIZES.body4, 
+  timeText: {
+    fontSize: SIZES.body4,
     color: COLORS.white,
     fontWeight: '500',
   },
-  footer: { 
-    padding: SIZES.padding, 
-    paddingBottom: 32 
+  actionContainer: {
+    marginTop: 24,
+    width: '100%',
+    alignItems: 'center',
   },
-  exportingContainer: { 
+  actionButton: {
+    width: '100%',
+    maxWidth: 300,
+  },
+  exportingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 16,
-    backgroundColor: 'rgba(148, 163, 184, 0.05)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  exportText: { 
-    fontSize: SIZES.body2, 
-    fontWeight: '500', 
-    color: COLORS.textLight 
+  exportText: {
+    fontSize: SIZES.body2,
+    fontWeight: '500',
+    color: '#1F2937',
   },
-  savedButton: { 
-    backgroundColor: '#22c55e' 
+  savedButton: {
+    backgroundColor: '#22c55e',
+    width: '100%',
+    maxWidth: 300,
   },
 });
 

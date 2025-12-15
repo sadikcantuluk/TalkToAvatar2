@@ -14,6 +14,7 @@ const ConfirmDialog = ({
   onCancel,
   loading = false,
   showCancel = true,
+  overlayStyle,
 }) => {
   const getIconName = () => {
     switch (type) {
@@ -48,7 +49,7 @@ const ConfirmDialog = ({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, overlayStyle]}>
         <View style={styles.dialog}>
           {/* Icon */}
           <View style={[styles.iconContainer, { backgroundColor: getIconColor() + '20' }]}>
@@ -98,20 +99,25 @@ const ConfirmDialog = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.0)', // Transparent
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   dialog: {
-    backgroundColor: COLORS.gray[900],
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 24,
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.gray[800],
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
   },
   iconContainer: {
     width: 80,
@@ -123,14 +129,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: SIZES.h3,
+    fontSize: SIZES.h3,
     fontWeight: '700',
-    color: COLORS.textLight,
+    color: '#1F2937',
     marginBottom: 12,
     textAlign: 'center',
   },
   message: {
     fontSize: SIZES.body2,
-    color: COLORS.gray[400],
+    color: '#4B5563', // Dark Gray
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -148,7 +155,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: COLORS.gray[800],
+    backgroundColor: '#F3F4F6',
   },
   confirmButton: {
     backgroundColor: COLORS.primary,
@@ -156,7 +163,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: SIZES.body2,
     fontWeight: '600',
-    color: COLORS.textLight,
+    color: '#374151',
   },
   confirmButtonText: {
     fontSize: SIZES.body2,

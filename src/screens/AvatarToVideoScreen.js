@@ -27,7 +27,7 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
   const { addNotification } = useNotifications();
   const { token, user } = useAuth();
   const { success, error: showError } = useToast();
-  
+
   const [selectedAvatar, setSelectedAvatar] = useState({
     name: 'Yusuf',
     description: 'Natural',
@@ -127,18 +127,18 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
       showError('User not authenticated');
       return;
     }
-    
+
     try {
       console.log('=== Saving Video to History ===');
       const key = getUserStorageKey('@video_history', user.id);
-      
+
       // Save to local AsyncStorage (fast)
       const existingHistory = await AsyncStorage.getItem(key);
       const history = existingHistory ? JSON.parse(existingHistory) : [];
       history.unshift(videoData);
       await AsyncStorage.setItem(key, JSON.stringify(history));
       console.log('✅ Video saved to AsyncStorage. Total videos:', history.length);
-      
+
       // Save to backend asynchronously (non-blocking)
       if (token && user) {
         Promise.resolve().then(async () => {
@@ -157,11 +157,11 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
                 created_at: videoData.createdAt,
               },
             };
-            
+
             const response = await videosAPI.create(token, backendData);
             const backendId = response.video?.id;
             console.log('✅ Video saved to backend:', backendId);
-            
+
             // Update local storage with backend_id for future deletion
             const saved = await AsyncStorage.getItem(key);
             if (saved && backendId) {
@@ -220,7 +220,7 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
       }
 
       console.log('✅ TTS audio generated:', ttsResult.audioUri);
-      
+
       // Get translated text for video prompt
       const translatedText = ttsResult.translatedText || scriptText;
       console.log('📝 Using translated text for video prompt');
@@ -243,7 +243,7 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
       // Step 3: Upload avatar to Fal.ai storage
       setCreationProgress('Uploading avatar...');
       console.log('Step 3: Uploading avatar to Fal.ai storage...');
-      
+
       // Get avatar image URI
       let avatarUri;
       if (selectedAvatar.image.uri) {
@@ -253,19 +253,19 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
       } else {
         // Default avatar - need to resolve and copy
         console.log('Default avatar - resolving asset...');
-        
+
         try {
           const resolvedAsset = Image.resolveAssetSource(selectedAvatar.image);
           console.log('Resolved asset:', resolvedAsset?.uri);
-          
+
           if (!resolvedAsset || !resolvedAsset.uri) {
             throw new Error('Could not resolve default avatar');
           }
-          
+
           // Copy to writable location
           const fileName = `avatar_default_${Date.now()}.jpg`;
           const newUri = `${FileSystem.documentDirectory}${fileName}`;
-          
+
           await FileSystem.downloadAsync(resolvedAsset.uri, newUri);
           console.log('✅ Avatar copied to:', newUri);
           avatarUri = newUri;
@@ -364,10 +364,11 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
   };
 
   return (
-    <DashboardLayout 
-      currentMode="video" 
+    <DashboardLayout
+      currentMode="video"
       onModeChange={handleModeChange}
       navigation={navigation}
+      showBackButton={true}
     >
       <ScrollView
         style={styles.scrollView}
@@ -414,6 +415,13 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
             onChangeText={setOutputName}
             maxLength={50}
             editable={!isCreating}
+            labelStyle={{ color: '#1F2937' }}
+            inputStyle={{
+              color: '#1F2937',
+              backgroundColor: '#FFFFFF',
+              borderColor: '#E5E7EB'
+            }}
+            placeholderTextColor="#9CA3AF"
           />
         </View>
 
@@ -428,6 +436,14 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
             numberOfLines={6}
             maxLength={1000}
             editable={!isCreating}
+            labelStyle={{ color: '#1F2937' }}
+            inputStyle={{
+              color: '#1F2937',
+              backgroundColor: '#FFFFFF',
+              borderColor: '#E5E7EB',
+              textAlignVertical: 'top'
+            }}
+            placeholderTextColor="#9CA3AF"
             rightIcon={
               scriptText.length > 0 ? (
                 <TouchableOpacity onPress={handleClearText} activeOpacity={0.7}>
@@ -448,6 +464,9 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
               <VoiceSelector
                 selectedVoice={selectedVoice}
                 onVoiceChange={setSelectedVoice}
+                style={styles.selectButton}
+                textColor="#1F2937"
+                labelColor="#6B7280"
               />
             </View>
 
@@ -457,35 +476,38 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
                 selectedLanguage={selectedLanguage}
                 onLanguageChange={setSelectedLanguage}
                 showFlag={false}
+                style={styles.selectButton}
+                textColor="#1F2937"
               />
             </View>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Fixed Footer */}
-      <View style={styles.footer}>
-        {isCreating && (
-          <View style={styles.progressContainer}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.progressText}>{creationProgress}</Text>
-          </View>
-        )}
-        <Button
-          title={isCreating ? "Creating..." : "Create Video"}
-          onPress={handleCreateVideo}
-          variant="primary"
-          style={styles.createButton}
-          disabled={isCreating}
-        />
-        <Button
-          title="Past Videos"
-          onPress={handlePastVideos}
-          variant="outline"
-          style={styles.pastButton}
-          disabled={isCreating}
-        />
-      </View>
+        {/* Action Buttons */}
+        <View style={styles.actionSection}>
+          {isCreating && (
+            <View style={styles.progressContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.progressText}>{creationProgress}</Text>
+            </View>
+          )}
+          <Button
+            title={isCreating ? "Creating..." : "Create Video"}
+            onPress={handleCreateVideo}
+            variant="primary"
+            style={styles.createButton}
+            disabled={isCreating}
+          />
+          <Button
+            title="Past Videos"
+            onPress={handlePastVideos}
+            variant="outline"
+            style={styles.pastButton}
+            textStyle={{ color: COLORS.primary }}
+            disabled={isCreating}
+          />
+        </View>
+      </ScrollView>
     </DashboardLayout>
   );
 };
@@ -493,11 +515,12 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
+    backgroundColor: '#F9FAFB', // Light Background
   },
   scrollContent: {
     padding: SIZES.padding,
     paddingTop: SIZES.padding * 1.5,
-    paddingBottom: 250,
+    paddingBottom: 40,
   },
   section: {
     marginBottom: 24,
@@ -514,7 +537,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: SIZES.h4,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937', // Dark Text
   },
   chooseAvatarButton: {
     flexDirection: 'row',
@@ -523,13 +546,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(19, 127, 236, 0.5)',
+    borderColor: 'rgba(45, 127, 131, 0.5)', // Teal Border
     borderRadius: 20,
+    backgroundColor: 'rgba(45, 127, 131, 0.05)',
   },
   chooseAvatarText: {
     fontSize: SIZES.body3,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: '#2D7F83', // Teal Text
   },
   avatarContainer: {
     alignItems: 'center',
@@ -543,8 +567,13 @@ const styles = StyleSheet.create({
     height: 128,
     borderRadius: 64,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderWidth: 4, // Thicker border
+    borderColor: '#FFFFFF',
+    shadowColor: '#2D7F83', // Teal Shadow
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   avatarImage: {
     width: '100%',
@@ -555,44 +584,55 @@ const styles = StyleSheet.create({
   },
   avatarName: {
     fontSize: SIZES.body2,
-    fontWeight: '500',
-    color: COLORS.textLight,
+    fontWeight: 'bold',
+    color: '#1F2937', // Dark Text
+    marginBottom: 4,
   },
   avatarDescription: {
     fontSize: SIZES.body4,
-    color: COLORS.gray[400],
+    color: '#6B7280', // Gray Text
   },
   nameInput: {
-    backgroundColor: 'rgba(148, 163, 184, 0.05)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: COLORS.gray[700],
+    borderColor: '#E5E7EB',
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     fontSize: SIZES.body1,
-    color: COLORS.textLight,
+    color: '#1F2937',
     height: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   textAreaContainer: {
     position: 'relative',
   },
   textArea: {
-    backgroundColor: 'rgba(148, 163, 184, 0.05)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: COLORS.gray[700],
+    borderColor: '#E5E7EB',
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     paddingTop: 40,
     paddingBottom: 32,
     fontSize: SIZES.body1,
-    color: COLORS.textLight,
+    color: '#1F2937',
     minHeight: 150,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   clearButtonInside: {
     position: 'absolute',
     top: 12,
     right: 12,
     padding: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: 12,
   },
   charCount: {
@@ -600,7 +640,7 @@ const styles = StyleSheet.create({
     bottom: 12,
     right: 16,
     fontSize: SIZES.body4,
-    color: COLORS.gray[400],
+    color: '#9CA3AF',
   },
   customizeRow: {
     flexDirection: 'row',
@@ -612,7 +652,7 @@ const styles = StyleSheet.create({
   selectLabel: {
     fontSize: SIZES.body3,
     fontWeight: '500',
-    color: COLORS.gray[400],
+    color: '#4B5563', // Gray 600
     marginBottom: 8,
   },
   selectButton: {
@@ -621,24 +661,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     height: 48,
     paddingHorizontal: 16,
-    backgroundColor: 'rgba(148, 163, 184, 0.05)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: COLORS.gray[700],
+    borderColor: '#E5E7EB',
     borderRadius: SIZES.radius,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   selectButtonText: {
     fontSize: SIZES.body2,
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: SIZES.padding,
-    backgroundColor: 'rgba(16, 25, 34, 0.95)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(148, 163, 184, 0.1)',
+  actionSection: {
+    marginTop: 32,
     gap: 12,
   },
   progressContainer: {
@@ -649,16 +687,26 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: SIZES.body3,
-    color: COLORS.gray[400],
+    color: '#2D7F83',
     flex: 1,
   },
   createButton: {
     width: '100%',
     height: 56,
+    backgroundColor: '#2D7F83', // Teal
+    borderRadius: 16,
   },
   pastButton: {
     width: '100%',
     height: 56,
+    borderColor: '#E5E7EB',
+    borderWidth: 1,
+    backgroundColor: '#FFFFFF', // Enable visibility on off-white backgrounds
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });
 

@@ -19,6 +19,7 @@ const Input = ({
   containerStyle,
   inputStyle,
   labelStyle,
+  labelColor,
   ...props
 }) => {
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +30,7 @@ const Input = ({
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && <Text style={[styles.label, labelStyle]}>{label}</Text>}
+      {label && <Text style={[styles.label, labelStyle, labelColor && { color: labelColor }]}>{label}</Text>}
       <View style={styles.inputContainer}>
         <TextInput
           style={[
@@ -51,21 +52,21 @@ const Input = ({
           {...props}
         />
         {secureTextEntry && (
-          <TouchableOpacity 
-            style={styles.rightIconContainer} 
+          <TouchableOpacity
+            style={styles.rightIconContainer}
             onPress={togglePasswordVisibility}
             activeOpacity={0.7}
           >
-            <Ionicons 
-              name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-              size={24} 
-              color="#666" 
+            <Ionicons
+              name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+              size={24}
+              color="#666"
             />
           </TouchableOpacity>
         )}
         {rightIcon && !secureTextEntry && (
-          <TouchableOpacity 
-            style={styles.rightIconContainer} 
+          <TouchableOpacity
+            style={styles.rightIconContainer}
             onPress={onRightIconPress}
             activeOpacity={0.7}
           >

@@ -9,7 +9,12 @@ const Header = ({
   onBackPress,
   rightComponent,
   containerStyle,
+  titleColor,
+  iconColor,
 }) => {
+  const finalIconColor = iconColor || COLORS.textLight;
+  const finalTitleColor = titleColor || COLORS.textLight;
+
   return (
     <View style={[styles.container, containerStyle]}>
       <View style={styles.leftContainer}>
@@ -19,17 +24,17 @@ const Header = ({
             onPress={onBackPress}
             activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={24} color={COLORS.textLight} />
+            <Ionicons name="arrow-back" size={24} color={finalIconColor} />
           </TouchableOpacity>
         ) : (
           <View style={styles.iconButton} />
         )}
       </View>
-      
+
       <View style={styles.centerContainer}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, { color: finalTitleColor }]}>{title}</Text>
       </View>
-      
+
       <View style={styles.rightContainer}>
         {rightComponent || <View style={styles.iconButton} />}
       </View>

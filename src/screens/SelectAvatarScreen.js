@@ -46,7 +46,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
 
   const saveCustomAvatars = async (avatars) => {
     if (!user?.id) return;
-    
+
     try {
       console.log('=== Saving Custom Avatars ===');
       console.log('Number of avatars to save:', avatars.length);
@@ -66,37 +66,37 @@ const SelectAvatarScreen = ({ navigation, route }) => {
       const handleFocus = async () => {
         console.log('=== SelectAvatarScreen Focus ===');
         console.log('Route params:', route.params);
-        
+
         // Reload custom avatars from storage to ensure we have the latest data
         await refreshAvatars();
-        
+
         if (route.params?.customAvatar) {
           const newAvatar = route.params.customAvatar;
           console.log('New custom avatar received:', newAvatar.id, newAvatar.name);
-          
+
           try {
             // Load current avatars from storage
             const key = getCustomAvatarsKey();
             const savedAvatars = await AsyncStorage.getItem(key);
             let currentAvatars = savedAvatars ? JSON.parse(savedAvatars) : [];
             console.log('Current avatars in storage:', currentAvatars.length);
-            
+
             // Check if this avatar already exists (avoid duplicates)
             const exists = currentAvatars.some(a => a.id === newAvatar.id);
             console.log('Avatar already exists:', exists);
-            
+
             if (!exists) {
               // Add new avatar to the list
               const updatedAvatars = [...currentAvatars, newAvatar];
               console.log('Adding new avatar. Total avatars:', updatedAvatars.length);
-              
+
               // Save to storage
               await saveCustomAvatars(updatedAvatars);
-              
+
               // Update state
               setCustomAvatars(updatedAvatars);
               setSelectedAvatar(newAvatar.id);
-              
+
               console.log('Avatar added successfully');
             } else {
               // Avatar exists, just select it
@@ -106,12 +106,12 @@ const SelectAvatarScreen = ({ navigation, route }) => {
           } catch (error) {
             console.error('Error handling new custom avatar:', error);
           }
-          
+
           // Clear the param to prevent re-adding on next focus
           navigation.setParams({ customAvatar: undefined });
         }
       };
-      
+
       handleFocus();
     }, [route.params?.customAvatar])
   );
@@ -122,7 +122,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
     // Navigate back to the screen that called us, or Dashboard if none
     const avatar = allAvatars.find(a => a.id === selectedAvatar);
     const returnScreen = route.params?.returnScreen || 'Dashboard';
-    
+
     if (navigation.canGoBack()) {
       navigation.navigate(returnScreen, { selectedAvatar: avatar });
     } else {
@@ -138,16 +138,16 @@ const SelectAvatarScreen = ({ navigation, route }) => {
     console.log('=== Deleting Custom Avatar ===');
     console.log('Avatar ID to delete:', avatarId);
     console.log('Current avatars count:', customAvatars.length);
-    
+
     const avatarToDelete = customAvatars.find(a => a.id === avatarId);
-    
+
     // Delete from local storage
     const updatedAvatars = customAvatars.filter(a => a.id !== avatarId);
     console.log('Avatars after deletion:', updatedAvatars.length);
-    
+
     setCustomAvatars(updatedAvatars);
     saveCustomAvatars(updatedAvatars);
-    
+
     // Delete from backend if authenticated and backend_id exists
     if (token && user && avatarToDelete?.backend_id) {
       try {
@@ -161,7 +161,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
     } else if (!avatarToDelete?.backend_id) {
       console.log('⚠️ No backend_id found, avatar was only local');
     }
-    
+
     if (selectedAvatar === avatarId) {
       console.log('Deleted avatar was selected, switching to default');
       setSelectedAvatar('yusuf');
@@ -175,6 +175,9 @@ const SelectAvatarScreen = ({ navigation, route }) => {
         title="Choose Your Avatar"
         showBackButton={true}
         onBackPress={() => navigation.goBack()}
+        containerStyle={{ backgroundColor: 'transparent' }}
+        titleColor="#1F2937"
+        iconColor="#1F2937"
       />
 
       {/* Main Content */}
@@ -189,7 +192,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
           onPress={handleCreateCustom}
           activeOpacity={0.7}
         >
-          <Ionicons name="add-circle-outline" size={24} color={COLORS.textLight} />
+          <Ionicons name="add-circle-outline" size={24} color="#1F2937" />
           <Text style={styles.createButtonText}>Create Your Own Avatar</Text>
         </TouchableOpacity>
 
@@ -238,8 +241,8 @@ const SelectAvatarScreen = ({ navigation, route }) => {
           <>
             <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Custom Avatars</Text>
             <View style={styles.grid}>
-              <SkeletonList 
-                count={2} 
+              <SkeletonList
+                count={2}
                 renderSkeleton={() => (
                   <View style={styles.avatarWrapper}>
                     <AvatarGridItemSkeleton />
@@ -317,7 +320,8 @@ const SelectAvatarScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: '#F9FAFB', // Light Background
+    paddingTop: 30, // Spacing for header
   },
   scrollView: {
     flex: 1,
@@ -331,19 +335,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     height: 48,
-    backgroundColor: COLORS.gray[800],
+    backgroundColor: '#FFFFFF',
     borderRadius: SIZES.radius,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   createButtonText: {
     fontSize: SIZES.body1,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937', // Dark Text
   },
   sectionTitle: {
     fontSize: SIZES.h4,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937', // Dark Text
     marginBottom: 16,
   },
   sectionTitleSpaced: {
@@ -373,7 +384,7 @@ const styles = StyleSheet.create({
   },
   avatarImageContainer: {
     width: '100%',
-    aspectRatio: 3/4,
+    aspectRatio: 3 / 4,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
@@ -409,9 +420,14 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   avatarInfo: {
     marginTop: 12,
@@ -419,17 +435,18 @@ const styles = StyleSheet.create({
   avatarName: {
     fontSize: SIZES.body1,
     fontWeight: '500',
-    color: COLORS.textLight,
+    color: '#1F2937', // Dark Text
     marginBottom: 4,
   },
   avatarDescription: {
     fontSize: SIZES.body3,
-    color: COLORS.gray[400],
+    color: COLORS.gray[500],
   },
   footer: {
     padding: SIZES.padding,
-    backgroundColor: 'rgba(16, 25, 34, 0.8)',
-    backdropFilter: 'blur(10px)',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   continueButton: {
     width: '100%',

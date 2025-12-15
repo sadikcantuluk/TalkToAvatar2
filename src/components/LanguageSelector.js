@@ -24,9 +24,12 @@ const languages = [
   { code: 'ar', name: 'العربية', flag: '🇸🇦' },
 ];
 
-const LanguageSelector = ({ selectedLanguage, onLanguageChange, style, showFlag = true }) => {
+const LanguageSelector = ({ selectedLanguage, onLanguageChange, style, showFlag = true, textColor }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const selectedLang = languages.find(l => l.code === selectedLanguage) || languages[0];
+
+  // Use provided color or default
+  const mainTextColor = textColor || COLORS.textLight;
 
   const handleSelect = (lang) => {
     onLanguageChange(lang.code);
@@ -41,13 +44,13 @@ const LanguageSelector = ({ selectedLanguage, onLanguageChange, style, showFlag 
         activeOpacity={0.7}
       >
         {showFlag && <Text style={styles.flag}>{selectedLang.flag}</Text>}
-        <Text style={styles.selectedText} numberOfLines={1} ellipsizeMode="tail">
+        <Text style={[styles.selectedText, { color: mainTextColor }]} numberOfLines={1} ellipsizeMode="tail">
           {selectedLang.name}
         </Text>
-        <Ionicons 
-          name="chevron-down" 
-          size={20} 
-          color="rgba(255,255,255,0.6)" 
+        <Ionicons
+          name="chevron-down"
+          size={20}
+          color={mainTextColor === COLORS.textLight ? "rgba(255,255,255,0.6)" : COLORS.gray[500]}
         />
       </TouchableOpacity>
 
@@ -58,7 +61,7 @@ const LanguageSelector = ({ selectedLanguage, onLanguageChange, style, showFlag 
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
             onPress={() => setModalVisible(false)}
@@ -70,11 +73,11 @@ const LanguageSelector = ({ selectedLanguage, onLanguageChange, style, showFlag 
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={COLORS.textLight} />
+                <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
+            <ScrollView
               style={styles.languageList}
               contentContainerStyle={styles.languageListContent}
               showsVerticalScrollIndicator={true}
@@ -90,7 +93,7 @@ const LanguageSelector = ({ selectedLanguage, onLanguageChange, style, showFlag 
                   activeOpacity={0.7}
                 >
                   <Text style={styles.languageFlag}>{lang.flag}</Text>
-                  <Text 
+                  <Text
                     style={[
                       styles.languageText,
                       selectedLanguage === lang.code && styles.languageTextSelected,
@@ -146,16 +149,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'transparent',
   },
   modalContent: {
     width: '90%',
     maxWidth: 400,
     maxHeight: SCREEN_HEIGHT * 0.6,
-    backgroundColor: 'rgba(30, 41, 59, 0.98)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: '#E5E7EB',
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -170,13 +173,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(30, 41, 59, 1)',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
   },
   modalTitle: {
     fontSize: SIZES.h4,
+    fontSize: SIZES.h4,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   closeButton: {
     padding: 4,
@@ -194,7 +200,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   languageOptionSelected: {
     backgroundColor: 'rgba(19, 127, 236, 0.15)',
@@ -205,7 +214,7 @@ const styles = StyleSheet.create({
   languageText: {
     flex: 1,
     fontSize: SIZES.body1,
-    color: COLORS.textLight,
+    color: '#1F2937',
   },
   languageTextSelected: {
     fontWeight: '600',
