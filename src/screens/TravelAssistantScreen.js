@@ -108,7 +108,7 @@ const TravelAssistantScreen = ({ navigation }) => {
 
   const handleModeChange = (mode) => {
     if (mode === 'tts') {
-      navigation.navigate('Dashboard');
+      navigation.navigate('TextToSpeech'); // Updated to correct route
     } else if (mode === 'video') {
       navigation.navigate('AvatarToVideo');
     }
@@ -422,8 +422,8 @@ const TravelAssistantScreen = ({ navigation }) => {
               <View style={styles.buttonRow}>
                 <Button
                   title={isUserSpeaking ? "Stop" : "Speak"}
-                  variant="outline"
-                  style={styles.smallButton}
+                  variant={isUserSpeaking ? "primary" : "outline"} // Use primary for Stop to ensure contrast
+                  style={[styles.smallButton, isUserSpeaking && { backgroundColor: '#EF4444', borderColor: '#EF4444' }]} // Red for stop
                   onPress={() => handleSpeak(true)}
                   disabled={!userText.trim() || isUserGeneratingSpeech}
                   loading={isUserGeneratingSpeech}
@@ -519,8 +519,8 @@ const TravelAssistantScreen = ({ navigation }) => {
               <View style={styles.buttonRow}>
                 <Button
                   title={isCounterpartSpeaking ? "Stop" : "Speak"}
-                  variant="outline"
-                  style={styles.smallButton}
+                  variant={isCounterpartSpeaking ? "primary" : "outline"}
+                  style={[styles.smallButton, isCounterpartSpeaking && { backgroundColor: '#EF4444', borderColor: '#EF4444' }]}
                   onPress={() => handleSpeak(false)}
                   disabled={!counterpartText.trim() || isCounterpartGeneratingSpeech}
                   loading={isCounterpartGeneratingSpeech}
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   section: {
     flex: 1,
     padding: SIZES.padding,
-    minHeight: 250,
+    minHeight: 220, // Reduced from 250 to allow better fit on small screens
   },
   sectionHeader: {
     flexDirection: 'row',

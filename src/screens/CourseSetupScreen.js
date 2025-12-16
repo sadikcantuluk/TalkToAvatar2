@@ -26,6 +26,8 @@ const SUPPORTED_LANGUAGES = [
     { code: 'fr', name: 'French', flag: '🇫🇷', nativeName: 'Français' },
     { code: 'de', name: 'German', flag: '🇩🇪', nativeName: 'Deutsch' },
     { code: 'it', name: 'Italian', flag: '🇮🇹', nativeName: 'Italiano' },
+    { code: 'pt', name: 'Portuguese', flag: '🇵🇹', nativeName: 'Português' },
+    { code: 'ar', name: 'Arabic', flag: '🇸🇦', nativeName: 'العربية' },
 ];
 
 const LEVELS = [

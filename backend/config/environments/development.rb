@@ -58,6 +58,30 @@ Rails.application.configure do
   config.action_mailer.raise_delivery_errors = true
   config.action_mailer.default_url_options = { host: 'localhost', port: 3000 }
   
+  # Suppress detailed mail content in logs for security
+  # Only log delivery status, not email body content
+  mail_logger = ActiveSupport::Logger.new(STDOUT).tap do |logger|
+    logger.formatter = proc do |severity, datetime, progname, msg|
+      if msg.is_a?(String)
+        # Filter out email body content
+        filtered_msg = msg
+        # Remove full email content between boundaries
+        filtered_msg = filtered_msg.gsub(/----==_mimepart_.*?----==_mimepart_/m, '[EMAIL CONTENT FILTERED]')
+        # Filter verification codes
+        filtered_msg = filtered_msg.gsub(/Verification Code: \d+/, 'Verification Code: [FILTERED]')
+        filtered_msg = filtered_msg.gsub(/code.*?(\d{4,6})/, 'code: [FILTERED]')
+        filtered_msg = filtered_msg.gsub(/(\d{4,6})/, '[CODE]') if filtered_msg.include?('verification') || filtered_msg.include?('code')
+        "#{severity} -- #{datetime}: #{filtered_msg}\n"
+      else
+        "#{severity} -- #{datetime}: #{msg}\n"
+      end
+    end
+  end
+  
+  config.action_mailer.logger = mail_logger
+  # Also filter ActiveJob logs for mail delivery
+  config.active_job.logger = mail_logger
+  
   config.action_mailer.smtp_settings = {
     address: 'smtp.gmail.com',
     port: 587,

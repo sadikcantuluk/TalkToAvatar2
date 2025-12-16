@@ -70,6 +70,10 @@ Rails.application.routes.draw do
       # User Course Progress
       resources :user_course_progresses, only: [:index, :create, :update]
       
+      # User Topic Progress
+      get '/courses/:course_id/topic_progress', to: 'user_topic_progresses#index'
+      post '/user_topic_progress', to: 'user_topic_progresses#create'
+      
       # Subjects (Sualingo Mode)
       resources :subjects, only: [:index, :create, :show, :update, :destroy]
       

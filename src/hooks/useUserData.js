@@ -25,7 +25,13 @@ export const useUserData = (dataType, options = {}) => {
 
   // Get storage key for this data type
   const getStorageKey = useCallback(() => {
-    if (storageKey) return getUserStorageKey(storageKey, user?.id);
+    if (storageKey) {
+      const key = getUserStorageKey(storageKey, user?.id);
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Storage key (custom):', key);
+      }
+      return key;
+    }
     
     const keyMap = {
       videos: '@video_history',
@@ -34,7 +40,13 @@ export const useUserData = (dataType, options = {}) => {
       customAvatars: '@custom_avatars',
     };
     
-    return getUserStorageKey(keyMap[dataType], user?.id);
+    const key = getUserStorageKey(keyMap[dataType], user?.id);
+    if (dataType === 'recordings') {
+      console.log('[useUserData-recordings] Storage key:', key);
+      console.log('[useUserData-recordings] User ID:', user?.id);
+      console.log('[useUserData-recordings] Base key:', keyMap[dataType]);
+    }
+    return key;
   }, [dataType, user?.id, storageKey]);
 
   // Get API client for this data type
@@ -121,6 +133,9 @@ export const useUserData = (dataType, options = {}) => {
   // Sync with backend
   const syncWithBackend = useCallback(async () => {
     if (!token || !user?.id || !autoSync) {
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Sync skipped - no token/user/autoSync:', { token: !!token, userId: user?.id, autoSync });
+      }
       return { success: false, error: 'Not authenticated or autoSync disabled' };
     }
 
@@ -136,11 +151,21 @@ export const useUserData = (dataType, options = {}) => {
       }
 
       // Fetch from backend
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Starting backend sync...');
+        console.log('[useUserData-recordings] Storage key:', key);
+        console.log('[useUserData-recordings] User ID:', user.id);
+      }
       console.log(`📤 Syncing ${dataType} from backend for user ${user.id}...`);
       const response = await apiClient.getAll(token);
       
       // Handle different response formats (array or wrapped in object)
       const backendData = Array.isArray(response) ? response : (response.data || response[dataType] || []);
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Backend response:', response);
+        console.log('[useUserData-recordings] Backend data count:', backendData.length);
+        console.log('[useUserData-recordings] Backend data sample:', backendData.slice(0, 2));
+      }
       console.log(`✅ Backend ${dataType} loaded:`, backendData.length);
 
       // Transform backend data
@@ -150,19 +175,44 @@ export const useUserData = (dataType, options = {}) => {
       }
 
       const transformedData = backendData.map(transformer);
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Transformed backend data count:', transformedData.length);
+        console.log('[useUserData-recordings] Transformed data sample:', transformedData.slice(0, 2));
+      }
 
       // Load local data
       const localDataStr = await AsyncStorage.getItem(key);
       const localData = localDataStr ? JSON.parse(localDataStr) : [];
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Local data count:', localData.length);
+        console.log('[useUserData-recordings] Local data sample:', localData.slice(0, 2));
+      }
 
       // Merge: backend data takes precedence, add any local-only items
+      // IMPORTANT: If backend returns empty array, preserve local data
+      if (dataType === 'recordings' && transformedData.length === 0 && localData.length > 0) {
+        console.log('[useUserData-recordings] ⚠️ Backend returned empty array, preserving local data');
+        console.log('[useUserData-recordings] Local data count:', localData.length);
+        // Don't overwrite local data with empty backend data
+        setData(localData);
+        await AsyncStorage.setItem(key, JSON.stringify(localData));
+        return { success: true, data: localData };
+      }
+
       const backendIds = new Set(transformedData.map(item => item.backend_id || item.id));
       const localOnlyItems = localData.filter(item => {
         const itemId = item.backend_id || item.id;
         return !itemId || !backendIds.has(itemId);
       });
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Local-only items count:', localOnlyItems.length);
+        console.log('[useUserData-recordings] Backend IDs:', Array.from(backendIds));
+      }
 
       const mergedData = [...transformedData, ...localOnlyItems];
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Merged data count:', mergedData.length);
+      }
 
       // Sort by createdAt (newest first)
       mergedData.sort((a, b) => {
@@ -175,16 +225,30 @@ export const useUserData = (dataType, options = {}) => {
       await AsyncStorage.setItem(key, JSON.stringify(mergedData));
       setData(mergedData);
       
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] ✅ Sync complete. Final count:', mergedData.length);
+      }
       console.log(`✅ ${dataType} synced. Total:`, mergedData.length);
       return { success: true, data: mergedData };
     } catch (err) {
       console.error(`⚠️ Error syncing ${dataType} from backend:`, err);
+      if (dataType === 'recordings') {
+        console.error('[useUserData-recordings] ❌ Sync error:', err);
+        console.error('[useUserData-recordings] Error details:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status
+        });
+      }
       setError(err);
       
       // Fallback to local data
       const key = getStorageKey();
       const localDataStr = await AsyncStorage.getItem(key);
       const localData = localDataStr ? JSON.parse(localDataStr) : [];
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Fallback to local data. Count:', localData.length);
+      }
       setData(localData);
       
       return { success: false, error: err, data: localData };
@@ -196,6 +260,9 @@ export const useUserData = (dataType, options = {}) => {
   // Load data from local storage
   const loadLocalData = useCallback(async () => {
     if (!user?.id) {
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] No user ID, returning empty array');
+      }
       setData([]);
       setLoading(false);
       return;
@@ -204,18 +271,35 @@ export const useUserData = (dataType, options = {}) => {
     try {
       setLoading(true);
       const key = getStorageKey();
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Loading local data from key:', key);
+      }
       const localDataStr = await AsyncStorage.getItem(key);
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Raw AsyncStorage data:', localDataStr ? 'exists' : 'null');
+      }
       const localData = localDataStr ? JSON.parse(localDataStr) : [];
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Parsed local data count:', localData.length);
+        console.log('[useUserData-recordings] Local data sample:', localData.slice(0, 2));
+      }
       
       // Transform local data if transformer provided
       const transformed = transformLocalData 
         ? localData.map(transformLocalData)
         : localData;
       
+      if (dataType === 'recordings') {
+        console.log('[useUserData-recordings] Transformed data count:', transformed.length);
+        console.log('[useUserData-recordings] Setting data to state');
+      }
       setData(transformed);
       setError(null);
     } catch (err) {
       console.error(`Error loading local ${dataType}:`, err);
+      if (dataType === 'recordings') {
+        console.error('[useUserData-recordings] Error loading local recordings:', err);
+      }
       setError(err);
       setData([]);
     } finally {

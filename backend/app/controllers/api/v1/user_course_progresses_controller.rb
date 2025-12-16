@@ -78,7 +78,7 @@ module Api
         Rails.logger.debug "✅ [DEBUG] Course found: #{course.id} - #{course.title}"
         Rails.logger.debug "✅ [DEBUG] Course language: #{course.language_code}, level: #{course.level}"
 
-        practice_sentence_id = progress_params[:practice_sentence_id]
+        practice_sentence_id = progress_params[:practice_sentence_id] || progress_params[:sentence_id]
         Rails.logger.debug "🔍 [DEBUG] Looking for practice sentence with ID: #{practice_sentence_id}"
         Rails.logger.debug "🔍 [DEBUG] Practice sentence ID type: #{practice_sentence_id.class}"
         
@@ -119,16 +119,35 @@ module Api
           progress.record_attempt(score_value)
         end
 
-        if progress_params[:completed] == true || progress_params[:completed] == 'true'
+        if progress_params[:completed] == true || progress_params[:completed] == 'true' || progress_params[:score].present?
           score_value = progress_params[:score]&.to_f
-          Rails.logger.debug "✅ [DEBUG] Marking as completed with score: #{score_value}"
-          progress.mark_completed!(score_value)
+          if score_value && score_value >= 85.0
+            Rails.logger.debug "✅ [DEBUG] Marking as completed with score: #{score_value} (>= 85)"
+            progress.mark_completed!(score_value)
+          else
+            Rails.logger.debug "⚠️ [DEBUG] Score #{score_value} is below 85, NOT marking as completed"
+            progress.completed = false if progress.new_record? # Ensure new records start false if low score
+            progress.score = score_value if score_value # Still update score
+          end
         end
 
         Rails.logger.debug "💾 [DEBUG] Saving progress..."
         if progress.save
           Rails.logger.debug "✅ [SUCCESS] Progress saved successfully"
           Rails.logger.debug "📊 [DEBUG] Final progress state: #{progress.inspect}"
+          
+          # Update topic progress if sentence was completed
+          if progress.completed && progress.practice_sentence
+            begin
+              topic = progress.practice_sentence.topic
+              UserTopicProgress.update_or_create_progress(current_user, course, topic)
+              Rails.logger.debug "✅ [DEBUG] Topic progress updated for topic: #{topic}"
+            rescue => e
+              Rails.logger.error "⚠️ [ERROR] Failed to update topic progress: #{e.message}"
+              # Don't fail the request if topic progress update fails
+            end
+          end
+          
           render json: {
             message: 'Progress updated successfully',
             progress: {
@@ -180,14 +199,21 @@ module Api
           progress.record_attempt(score_value)
         end
 
-        if progress_params[:completed].present?
-          if progress_params[:completed] == true || progress_params[:completed] == 'true'
-            score_value = progress_params[:score]&.to_f
-            Rails.logger.debug "✅ [DEBUG] Marking as completed with score: #{score_value}"
-            progress.mark_completed!(score_value)
-          else
-            Rails.logger.debug "❌ [DEBUG] Marking as incomplete"
-            progress.completed = false
+        if progress_params[:completed].present? || progress_params[:score].present?
+          score_value = progress_params[:score]&.to_f
+          
+          if score_value && score_value >= 85.0
+             Rails.logger.debug "✅ [DEBUG] Marking as completed with score: #{score_value} (>= 85)"
+             progress.mark_completed!(score_value)
+          elsif score_value
+             Rails.logger.debug "⚠️ [DEBUG] Score #{score_value} is below 85, NOT marking as completed"
+             # If it was previously completed, do we un-complete it? 
+             # Usually better to keep it completed if they passed before. 
+             # But if they explicitly fail now? Let's assume keep if already true, unless user data reset.
+             # However, for this specific logic request: "If score < 85: Progress not added". 
+             # So we just update the score but don't set completed=true.
+             progress.score = score_value
+             # We do NOT set progress.completed = false here to preserve past success if any.
           end
         end
 
@@ -195,6 +221,20 @@ module Api
         if progress.save
           Rails.logger.debug "✅ [SUCCESS] Progress updated successfully"
           Rails.logger.debug "📊 [DEBUG] Final progress state: #{progress.inspect}"
+          
+          # Update topic progress if sentence was completed
+          if progress.completed && progress.practice_sentence
+            begin
+              course = progress.course
+              topic = progress.practice_sentence.topic
+              UserTopicProgress.update_or_create_progress(current_user, course, topic)
+              Rails.logger.debug "✅ [DEBUG] Topic progress updated for topic: #{topic}"
+            rescue => e
+              Rails.logger.error "⚠️ [ERROR] Failed to update topic progress: #{e.message}"
+              # Don't fail the request if topic progress update fails
+            end
+          end
+          
           render json: {
             message: 'Progress updated successfully',
             progress: {
@@ -219,11 +259,12 @@ module Api
       end
 
       private
-
+      
       def progress_params
         permitted = params.require(:user_course_progress).permit(
           :course_id,
-          :practice_sentence_id,  # ✅ Changed from :sentence_id
+          :practice_sentence_id,
+          :sentence_id,  # ✅ Added support for :sentence_id
           :completed,
           :score,
           :attempts

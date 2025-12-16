@@ -81,7 +81,7 @@ const Skeleton = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#F3F4F6', // Light gray background for skeleton
     overflow: 'hidden',
     position: 'relative',
   },
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)', // White shimmer overlay
   },
 });
 

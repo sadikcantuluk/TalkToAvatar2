@@ -995,10 +995,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SIZES.padding,
+    paddingBottom: 60, // Increased bottom padding to ensure buttons are visible above safe area/nav bar
   },
   avatarSection: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 8, // Reduced from 16 to pull inputs up
   },
   avatarContainer: {
     width: '100%',
@@ -1121,7 +1122,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   inputSection: {
-    marginBottom: 12,
+    marginBottom: 8, // Reduced from 12
   },
   labelContainer: {
     marginBottom: 8,

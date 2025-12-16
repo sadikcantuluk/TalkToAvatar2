@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_11_17_152948) do
+ActiveRecord::Schema[7.1].define(version: 2025_12_16_182251) do
   create_schema "auth"
   create_schema "extensions"
   create_schema "graphql"
@@ -198,6 +198,46 @@ ActiveRecord::Schema[7.1].define(version: 2025_11_17_152948) do
     t.check_constraint "level::text = ANY (ARRAY['A1'::character varying, 'A2'::character varying, 'B1'::character varying, 'B2'::character varying, 'C1'::character varying, 'C2'::character varying]::text[])", name: "sentence_banks_level_check"
   end
 
+  create_table "sualingo_course_progress", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.uuid "course_id", null: false
+    t.uuid "sentence_id", null: false
+    t.boolean "completed", default: false
+    t.float "score"
+    t.float "best_score"
+    t.integer "attempts", default: 0
+    t.timestamptz "last_practiced_at"
+    t.timestamptz "created_at", default: -> { "now()" }
+    t.timestamptz "updated_at", default: -> { "now()" }
+    t.index ["course_id"], name: "idx_sualingo_course_progress_course_id"
+    t.index ["user_id"], name: "idx_sualingo_course_progress_user_id"
+    t.unique_constraint ["user_id", "course_id", "sentence_id"], name: "unique_progress_per_sentence"
+  end
+
+  create_table "sualingo_courses", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.string "name", limit: 255, null: false
+    t.text "description"
+    t.string "native_language", limit: 50, null: false
+    t.string "target_language", limit: 50, null: false
+    t.string "level", limit: 10, null: false
+    t.string "topic", limit: 50, null: false
+    t.string "avatar_gender", limit: 10, null: false
+    t.string "voice_preference", limit: 50, null: false
+    t.string "ai_service", limit: 20, null: false
+    t.string "status", limit: 20, default: "active"
+    t.timestamptz "created_at", default: -> { "now()" }
+    t.timestamptz "updated_at", default: -> { "now()" }
+    t.index ["status"], name: "idx_sualingo_courses_status"
+    t.index ["user_id"], name: "idx_sualingo_courses_user_id"
+    t.check_constraint "ai_service::text = ANY (ARRAY['openai'::character varying, 'gemini'::character varying]::text[])", name: "sualingo_courses_ai_service_check"
+    t.check_constraint "avatar_gender::text = ANY (ARRAY['Male'::character varying, 'Female'::character varying]::text[])", name: "sualingo_courses_avatar_gender_check"
+    t.check_constraint "level::text = ANY (ARRAY['A1'::character varying, 'A2'::character varying, 'B1'::character varying, 'B2'::character varying, 'C1'::character varying, 'C2'::character varying]::text[])", name: "sualingo_courses_level_check"
+    t.check_constraint "status::text = ANY (ARRAY['active'::character varying, 'completed'::character varying, 'archived'::character varying]::text[])", name: "sualingo_courses_status_check"
+    t.check_constraint "topic::text = ANY (ARRAY['food'::character varying, 'ordering'::character varying, 'directions'::character varying, 'accommodation'::character varying, 'greetings'::character varying]::text[])", name: "sualingo_courses_topic_check"
+    t.unique_constraint ["user_id", "name"], name: "unique_course_name_per_user"
+  end
+
   create_table "subjects", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "course_id", null: false
     t.string "title", null: false
@@ -244,6 +284,27 @@ ActiveRecord::Schema[7.1].define(version: 2025_11_17_152948) do
     t.index ["user_id"], name: "index_user_course_progresses_on_user_id"
   end
 
+  create_table "user_topic_progress", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.uuid "course_id", null: false
+    t.string "topic", limit: 50, null: false
+    t.integer "progress_percentage", default: 0, null: false
+    t.integer "completed_sentences", default: 0, null: false
+    t.integer "total_sentences", default: 0, null: false
+    t.datetime "last_updated_at", precision: nil, default: -> { "now()" }
+    t.datetime "created_at", precision: nil, default: -> { "now()" }
+    t.datetime "updated_at", precision: nil, default: -> { "now()" }
+    t.index ["course_id"], name: "idx_user_topic_progress_course"
+    t.index ["last_updated_at"], name: "idx_user_topic_progress_updated"
+    t.index ["topic"], name: "idx_user_topic_progress_topic"
+    t.index ["user_id", "course_id"], name: "idx_user_topic_progress_composite"
+    t.index ["user_id"], name: "idx_user_topic_progress_user"
+    t.check_constraint "completed_sentences >= 0", name: "user_topic_progress_completed_sentences_check"
+    t.check_constraint "progress_percentage >= 0 AND progress_percentage <= 100", name: "user_topic_progress_progress_percentage_check"
+    t.check_constraint "total_sentences >= 0", name: "user_topic_progress_total_sentences_check"
+    t.unique_constraint ["user_id", "course_id", "topic"], name: "user_topic_progress_user_id_course_id_topic_key"
+  end
+
   create_table "users", id: :uuid, default: -> { "uuid_generate_v4()" }, force: :cascade do |t|
     t.string "username", limit: 255, null: false
     t.string "email", limit: 255, null: false
@@ -285,6 +346,10 @@ ActiveRecord::Schema[7.1].define(version: 2025_11_17_152948) do
   add_foreign_key "recordings", "courses"
   add_foreign_key "recordings", "users", name: "recordings_user_id_fkey", on_delete: :cascade
   add_foreign_key "reports", "courses"
+  add_foreign_key "sualingo_course_progress", "auth.users", name: "sualingo_course_progress_user_id_fkey", on_delete: :cascade
+  add_foreign_key "sualingo_course_progress", "practice_sentences", column: "sentence_id", name: "sualingo_course_progress_sentence_id_fkey", on_delete: :cascade
+  add_foreign_key "sualingo_course_progress", "sualingo_courses", column: "course_id", name: "sualingo_course_progress_course_id_fkey", on_delete: :cascade
+  add_foreign_key "sualingo_courses", "auth.users", name: "sualingo_courses_user_id_fkey", on_delete: :cascade
   add_foreign_key "subjects", "courses"
   add_foreign_key "user_course_progress", "courses", name: "user_course_progress_course_id_fkey", on_delete: :cascade
   add_foreign_key "user_course_progress", "practice_sentences", column: "sentence_id", name: "user_course_progress_sentence_id_fkey", on_delete: :cascade
@@ -292,6 +357,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_11_17_152948) do
   add_foreign_key "user_course_progresses", "courses"
   add_foreign_key "user_course_progresses", "practice_sentences"
   add_foreign_key "user_course_progresses", "users"
+  add_foreign_key "user_topic_progress", "courses", name: "user_topic_progress_course_id_fkey", on_delete: :cascade
+  add_foreign_key "user_topic_progress", "users", name: "user_topic_progress_user_id_fkey", on_delete: :cascade
   add_foreign_key "videos", "courses"
   add_foreign_key "videos", "users", name: "videos_user_id_fkey", on_delete: :cascade
 end

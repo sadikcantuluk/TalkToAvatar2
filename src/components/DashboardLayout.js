@@ -26,13 +26,13 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
     // Direct navigation based on mode (only if navigation is available)
     if (navigation) {
       if (mode.id === 'tts') {
-        navigation.navigate('Dashboard');
+        navigation.navigate('TextToSpeech');
       } else if (mode.id === 'video') {
         navigation.navigate('AvatarToVideo');
       } else if (mode.id === 'travel') {
         navigation.navigate('TravelAssistant');
       } else if (mode.id === 'sualingo') {
-        navigation.navigate('Sualingo');
+        navigation.navigate('Courses');
       }
     }
 

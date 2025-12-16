@@ -19,6 +19,8 @@ module Api
           begin
             UserMailer.email_verification(user, code).deliver_later
             email_sent = true
+            # Log only that email was sent, not the code
+            Rails.logger.info "Verification email sent to user #{user.id}"
           rescue => e
             Rails.logger.error "Email sending failed: #{e.message}"
             email_sent = false
@@ -77,14 +79,18 @@ module Api
 
       # POST /api/v1/auth/verify_email
       def verify_email
-        user = User.find_by(id: verify_params[:user_id])
+        # Handle both direct params and nested auth params for flexibility
+        user_id = verify_params[:user_id]
+        code = verify_params[:code]
+        
+        user = User.find_by(id: user_id)
         
         unless user
           render json: { error: 'User not found' }, status: :not_found
           return
         end
 
-        verification = user.email_verifications.active.find_by(code: verify_params[:code])
+        verification = user.email_verifications.active.find_by(code: code)
         
         if verification
           if verification.expired?
@@ -138,6 +144,8 @@ module Api
         # Send verification email
         begin
           UserMailer.email_verification(user, code).deliver_later
+          # Log only that email was sent, not the code
+          Rails.logger.info "Verification email resent to user #{user.id}"
           render json: { message: 'Verification code sent successfully' }, status: :ok
         rescue => e
           Rails.logger.error "Email sending failed: #{e.message}"
@@ -164,9 +172,9 @@ module Api
         # Send password reset email
         UserMailer.password_reset(user, token).deliver_later
         
+        # Never send reset token in response for security
         render json: { 
-          message: 'Password reset instructions sent to your email',
-          reset_token: token  # In production, don't send this in response
+          message: 'Password reset instructions sent to your email'
         }, status: :ok
       rescue => e
         render json: { error: e.message }, status: :internal_server_error
@@ -263,7 +271,12 @@ module Api
       end
 
       def verify_params
-        params.permit(:user_id, :code)
+        # Allow both direct params and nested auth params
+        if params[:auth].present?
+          params.require(:auth).permit(:user_id, :code)
+        else
+          params.permit(:user_id, :code)
+        end
       end
 
       def resend_params

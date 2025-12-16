@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,13 +13,18 @@ import {
   StatusBar,
   Image,
   Pressable,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth, useToast } from '../context';
-import { useCourse, useCourseSubjects, useCourseProgress, useDeleteCourse } from '../hooks/useCourseQueries';
+import { useCourse, useCourseSubjects, useCourseProgress, useDeleteCourse, useUpdateCourse } from '../hooks/useCourseQueries';
 import { COLORS, SIZES, FONTS, IMAGES } from '../constants';
 import VoiceSelector from '../components/VoiceSelector';
 import TopicSelector from '../components/TopicSelector';
+import { mergeTopicsWithProgress } from '../constants/topics';
+import { ProgressBarSkeleton } from '../components/SkeletonComponents';
 
 const THEME = {
   primary: '#2D7F83',
@@ -36,10 +41,18 @@ const CourseDetailScreen = ({ route, navigation }) => {
   // React Query hooks
   const courseQuery = useCourse(courseId);
   const subjectsQuery = useCourseSubjects(courseId);
+  const updateCourseMutation = useUpdateCourse();
 
-  // Use initial course if available, otherwise use query data
-  const course = initialCourse || courseQuery.data;
-  const subjects = subjectsQuery.data || [];
+  // Use query data first (for real-time updates), fallback to initialCourse if query not loaded yet
+  const course = courseQuery.data || initialCourse;
+
+  // Merge static topics with progress data from backend
+  // Static topics load instantly, progress is fetched separately
+  const subjects = useMemo(() => {
+    const progressData = subjectsQuery.data || [];
+    return mergeTopicsWithProgress(progressData);
+  }, [subjectsQuery.data]);
+
   const loading = courseQuery.isLoading && !initialCourse;
 
   // Selection State
@@ -47,6 +60,12 @@ const CourseDetailScreen = ({ route, navigation }) => {
   const [selectedVoice, setSelectedVoice] = useState('alloy'); // Default to Alloy
   const [selectedAvatar, setSelectedAvatar] = useState('male'); // 'male' or 'female'
   const [isProgressExpanded, setIsProgressExpanded] = useState(false);
+
+  // Course Edit State
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editErrors, setEditErrors] = useState({});
 
   // Calculate Overall Progress
   const calculateOverallProgress = () => {
@@ -76,6 +95,7 @@ const CourseDetailScreen = ({ route, navigation }) => {
       topic: selectedTopic.topic,
       topicTitle: selectedTopic.title,
       selectedVoice: selectedVoice,
+      selectedAvatar: selectedAvatar, // Pass selected avatar (male/female) to practice screen
     });
   };
 
@@ -115,62 +135,105 @@ const CourseDetailScreen = ({ route, navigation }) => {
           <Text style={styles.levelSubtitle}>Intermediate Level Course</Text>
         </View>
 
-        <TouchableOpacity style={styles.editLevelButton}>
+        <TouchableOpacity
+          style={styles.editLevelButton}
+          onPress={() => {
+            setEditTitle(course?.title || '');
+            setEditDescription(course?.description || '');
+            setEditErrors({});
+            setIsEditModalVisible(true);
+          }}
+        >
           <Ionicons name="pencil" size={20} color={THEME.text} />
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  const renderProgressSection = () => (
-    <View style={styles.sectionContainer}>
-      <TouchableOpacity
-        style={styles.progressCard}
-        onPress={() => setIsProgressExpanded(!isProgressExpanded)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressTitle}>Course Progress</Text>
-          <View style={styles.progressHeaderRight}>
-            <Text style={styles.progressPercentage}>{overallProgress}%</Text>
-            <Ionicons
-              name={isProgressExpanded ? "chevron-up" : "chevron-down"}
-              size={20}
-              color={THEME.textSecondary}
-            />
-          </View>
-        </View>
+  const renderProgressSection = () => {
+    // Helper function for smooth color transitions (0-40% red/orange, 40-70% yellow, 70-100% green)
+    const getProgressColor = (progress) => {
+      if (progress < 20) return '#EF4444'; // Red - Very low
+      if (progress < 40) return '#F97316'; // Orange - Low progress
+      if (progress < 60) return '#FBBF24'; // Yellow - Getting started
+      if (progress < 70) return '#F59E0B'; // Amber - Good progress
+      if (progress < 90) return '#22C55E'; // Green - Great progress
+      return '#047857'; // Emerald - Excellent/Complete
+    };
 
-        <View style={styles.progressBarBackground}>
-          <View style={[styles.progressBarFill, { width: `${overallProgress}%` }]} />
-        </View>
+    const isLoading = subjectsQuery.isLoading || subjectsQuery.isFetching;
 
-        {isProgressExpanded && (
-          <View style={styles.detailedProgressContainer}>
-            {subjects.map((subject, index) => (
-              <View key={index} style={styles.topicProgressRow}>
-                <View style={styles.topicProgressLabel}>
-                  <Text style={styles.topicProgressName}>{subject.title}</Text>
-                  <Text style={styles.topicProgressValue}>{subject.progress || 0}%</Text>
-                </View>
-                <View style={styles.topicProgressBarBackground}>
-                  <View
-                    style={[
-                      styles.topicProgressBarFill,
-                      {
-                        width: `${subject.progress || 0}%`,
-                        backgroundColor: (subject.progress || 0) > 0 ? '#10B981' : '#E5E7EB'
-                      }
-                    ]}
+    return (
+      <View style={styles.sectionContainer}>
+        <TouchableOpacity
+          style={styles.progressCard}
+          onPress={() => setIsProgressExpanded(!isProgressExpanded)}
+          activeOpacity={0.7}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ProgressBarSkeleton showLabel={true} showPercentage={true} />
+          ) : (
+            <>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressTitle}>Course Progress</Text>
+                <View style={styles.progressHeaderRight}>
+                  <Text style={styles.progressPercentage}>{overallProgress}%</Text>
+                  <Ionicons
+                    name={isProgressExpanded ? "chevron-up" : "chevron-down"}
+                    size={20}
+                    color={THEME.textSecondary}
                   />
                 </View>
               </View>
-            ))}
-          </View>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
+
+              <View style={styles.progressBarBackground}>
+                <View style={[
+                  styles.progressBarFill,
+                  {
+                    width: `${overallProgress}%`,
+                    backgroundColor: getProgressColor(overallProgress)
+                  }
+                ]} />
+              </View>
+            </>
+          )}
+
+          {isProgressExpanded && !isLoading && (
+            <View style={styles.detailedProgressContainer}>
+              {subjects.map((subject, index) => (
+                <View key={index} style={styles.topicProgressRow}>
+                  <View style={styles.topicProgressLabel}>
+                    <Text style={styles.topicProgressName}>{subject.title}</Text>
+                    <Text style={styles.topicProgressValue}>{subject.progress || 0}%</Text>
+                  </View>
+                  <View style={styles.topicProgressBarBackground}>
+                    <View
+                      style={[
+                        styles.topicProgressBarFill,
+                        {
+                          width: `${subject.progress || 0}%`,
+                          backgroundColor: getProgressColor(subject.progress || 0)
+                        }
+                      ]}
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {isProgressExpanded && isLoading && (
+            <View style={styles.detailedProgressContainer}>
+              {[1, 2, 3].map((index) => (
+                <ProgressBarSkeleton key={index} showLabel={true} showPercentage={true} />
+              ))}
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   // Combined Row for Topic and Voice
   const renderTopicAndVoiceRow = () => (
@@ -227,7 +290,7 @@ const CourseDetailScreen = ({ route, navigation }) => {
         >
           <View style={[styles.avatarImageContainer, selectedAvatar === 'male' && styles.avatarImageContainerSelected]}>
             <Image
-              source={IMAGES.yusuf}
+              source={IMAGES.sualingoMan}
               style={styles.avatarImage}
               resizeMode="cover"
             />
@@ -253,7 +316,7 @@ const CourseDetailScreen = ({ route, navigation }) => {
         >
           <View style={[styles.avatarImageContainer, selectedAvatar === 'female' && styles.avatarImageContainerSelected]}>
             <Image
-              source={IMAGES.eda}
+              source={IMAGES.sualingoWoman}
               style={styles.avatarImage}
               resizeMode="cover"
             />
@@ -297,9 +360,9 @@ const CourseDetailScreen = ({ route, navigation }) => {
         {selectedTopic && (
           <View style={styles.previewCard}>
             <Image
-              source={selectedAvatar === 'female' ? IMAGES.eda : IMAGES.yusuf}
+              source={selectedAvatar === 'female' ? IMAGES.sualingoWoman : IMAGES.sualingoMan}
               style={styles.previewAvatar}
-              resizeMode="contain"
+              resizeMode="cover"
             />
             <View style={styles.previewBubble}>
               <Text style={styles.previewText} numberOfLines={2}>
@@ -316,6 +379,149 @@ const CourseDetailScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Course Edit Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalKeyboardAvoiding}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setIsEditModalVisible(false)}
+          >
+            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Course</Text>
+                <TouchableOpacity
+                  onPress={() => setIsEditModalVisible(false)}
+                  style={styles.modalCloseButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={24} color={THEME.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={styles.modalBodyContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    Course Title <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      editErrors.title && styles.inputError
+                    ]}
+                    placeholder="Enter course title"
+                    placeholderTextColor={THEME.textSecondary}
+                    value={editTitle}
+                    onChangeText={(text) => {
+                      setEditTitle(text);
+                      if (editErrors.title) {
+                        setEditErrors({ ...editErrors, title: null });
+                      }
+                    }}
+                    maxLength={50}
+                    autoCorrect={false}
+                  />
+                  {editErrors.title && (
+                    <Text style={styles.errorText}>{editErrors.title}</Text>
+                  )}
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Description</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea, editErrors.description && styles.inputError]}
+                    placeholder="Briefly describe what this course covers..."
+                    placeholderTextColor={THEME.textSecondary}
+                    value={editDescription}
+                    onChangeText={(text) => {
+                      setEditDescription(text);
+                      if (editErrors.description) {
+                        setEditErrors({ ...editErrors, description: null });
+                      }
+                    }}
+                    multiline
+                    numberOfLines={4}
+                    maxLength={200}
+                    textAlignVertical="top"
+                  />
+                  {editErrors.description && (
+                    <Text style={styles.errorText}>{editErrors.description}</Text>
+                  )}
+                  <Text style={styles.charCount}>
+                    {editDescription.length}/200
+                  </Text>
+                </View>
+              </ScrollView>
+
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setIsEditModalVisible(false)}
+                  disabled={updateCourseMutation.isLoading}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.saveButton,
+                    (!editTitle.trim() || updateCourseMutation.isLoading) && styles.saveButtonDisabled,
+                  ]}
+                  onPress={async () => {
+                    // Validate
+                    const errors = {};
+                    if (!editTitle.trim()) {
+                      errors.title = 'Course title is required';
+                    }
+                    if (editTitle.trim().length < 3) {
+                      errors.title = 'Title must be at least 3 characters';
+                    }
+
+                    if (Object.keys(errors).length > 0) {
+                      setEditErrors(errors);
+                      return;
+                    }
+
+                    try {
+                      await updateCourseMutation.mutateAsync({
+                        courseId: courseId,
+                        courseData: {
+                          title: editTitle.trim(),
+                          description: editDescription.trim() || null,
+                        },
+                      });
+                      setIsEditModalVisible(false);
+                      Alert.alert('Success', 'Course updated successfully');
+                    } catch (error) {
+                      Alert.alert('Error', error?.response?.data?.errors?.[0] || error?.message || 'Failed to update course');
+                    }
+                  }}
+                  disabled={!editTitle.trim() || updateCourseMutation.isLoading}
+                >
+                  {updateCourseMutation.isLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -640,6 +846,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     marginRight: 12,
     backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
   },
   previewBubble: {
     backgroundColor: '#FFFFFF',
@@ -685,6 +892,144 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: THEME.text,
+  },
+  // Edit Modal Styles - Updated
+  modalKeyboardAvoiding: {
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', // Darker overlay for focus
+    justifyContent: 'center', // Center vertically
+    alignItems: 'center', // Center horizontally
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24, // Rounded corners
+    width: '100%',
+    maxWidth: 500, // Constrain width on tablets
+    maxHeight: '80%', // Avoid full height
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20, // Softer, larger shadow
+    elevation: 10,
+    overflow: 'hidden', // Clip children for border radius
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: THEME.text,
+    letterSpacing: -0.5,
+  },
+  modalCloseButton: {
+    padding: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+  },
+  modalBody: {
+    paddingHorizontal: 24,
+  },
+  modalBodyContent: {
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  formGroup: {
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  required: {
+    color: '#EF4444',
+  },
+  input: {
+    borderWidth: 2, // Thicker border
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 16,
+    color: THEME.text,
+    backgroundColor: '#FAFAFA',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  textArea: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+    paddingTop: 16,
+  },
+  charCount: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'right',
+    marginTop: 6,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#EF4444',
+    marginTop: 6,
+    fontWeight: '500',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 16,
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  cancelButtonText: {
+    color: '#4B5563',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  saveButton: {
+    backgroundColor: THEME.primary,
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

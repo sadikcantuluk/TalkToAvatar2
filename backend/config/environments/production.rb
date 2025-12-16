@@ -83,6 +83,31 @@ Rails.application.configure do
   config.action_mailer.raise_delivery_errors = true
   config.action_mailer.default_url_options = { host: ENV['FRONTEND_URL'] || 'your-domain.com' }
   
+  # Suppress detailed mail content in logs for security (production)
+  # Only log delivery status, not email body content
+  mail_logger = ActiveSupport::Logger.new(STDOUT).tap do |logger|
+    logger.formatter = proc do |severity, datetime, progname, msg|
+      if msg.is_a?(String)
+        # Only log basic delivery info, filter out email content
+        if msg.include?('Delivered mail') || msg.include?('Failed to deliver') || msg.include?('Performed')
+          # Keep job status but filter content
+          filtered_msg = msg.gsub(/----==_mimepart_.*?----==_mimepart_/m, '[EMAIL CONTENT FILTERED]')
+          filtered_msg = filtered_msg.gsub(/Verification Code: \d+/, 'Verification Code: [FILTERED]')
+          "#{severity} -- #{datetime}: #{filtered_msg}\n"
+        else
+          # Filter out all email content
+          "#{severity} -- #{datetime}: [EMAIL CONTENT FILTERED]\n"
+        end
+      else
+        "#{severity} -- #{datetime}: #{msg}\n"
+      end
+    end
+  end
+  
+  config.action_mailer.logger = mail_logger
+  # Also filter ActiveJob logs for mail delivery
+  config.active_job.logger = mail_logger
+  
   config.action_mailer.smtp_settings = {
     address: 'smtp.gmail.com',
     port: 587,

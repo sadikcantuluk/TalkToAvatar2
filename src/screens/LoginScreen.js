@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { COLORS, FONTS, SIZES } from '../constants/theme';
 import { useAuth } from '../context';
 import { useNotifications } from '../context';
 import authAPI from '../services/authAPI';
+import rememberMeService from '../services/rememberMeService';
 
 // Local Theme Colors for Sualingo Design
 const THEME = {
@@ -42,6 +43,32 @@ const LoginScreen = ({ navigation }) => {
 
   const { login } = useAuth();
   const { showNotification } = useNotifications();
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    loadSavedCredentials();
+  }, []);
+
+  const loadSavedCredentials = async () => {
+    try {
+      const saved = await rememberMeService.getSavedCredentials();
+      if (saved.rememberMe && saved.email && saved.password) {
+        setEmail(saved.email);
+        setPassword(saved.password);
+        setRememberMe(true);
+      }
+    } catch (error) {
+      console.error('Error loading saved credentials:', error);
+    }
+  };
+
+  const handleRememberMeChange = async (value) => {
+    setRememberMe(value);
+    // If unchecked, clear saved credentials
+    if (!value) {
+      await rememberMeService.clearSavedCredentials();
+    }
+  };
 
   const handleLogin = async () => {
     // Clear previous errors
@@ -79,6 +106,15 @@ const LoginScreen = ({ navigation }) => {
 
       // Login successful
       await login(response.token, response.user);
+      
+      // Save credentials if remember me is checked
+      if (rememberMe) {
+        await rememberMeService.saveCredentials(email.trim(), password);
+      } else {
+        // Clear saved credentials if remember me is unchecked
+        await rememberMeService.clearSavedCredentials();
+      }
+      
       showNotification('Login successful!', 'success');
       navigation.replace('Dashboard');
     } catch (error) {
@@ -166,7 +202,7 @@ const LoginScreen = ({ navigation }) => {
             <View style={styles.optionsRow}>
               <TouchableOpacity
                 style={styles.rememberMeContainer}
-                onPress={() => setRememberMe(!rememberMe)}
+                onPress={() => handleRememberMeChange(!rememberMe)}
                 activeOpacity={0.7}
               >
                 <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
@@ -201,16 +237,6 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.registerText}>Hesabın yok mu? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>
                 <Text style={styles.registerLink}>Kayıt Ol</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Social Login */}
-            <View style={styles.socialContainer}>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-google" size={24} color="#EA4335" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-apple" size={24} color="#000000" />
               </TouchableOpacity>
             </View>
           </View>
@@ -342,29 +368,6 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: THEME.textSecondary,
     fontSize: 14,
-  },
-  socialContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
 });
 

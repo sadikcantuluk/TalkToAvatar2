@@ -84,20 +84,23 @@ export const RecordingCardSkeleton = () => {
 export const CourseCardSkeleton = () => {
   return (
     <View style={styles.courseCard}>
-      <View style={styles.courseHeader}>
-        <View style={styles.courseInfo}>
-          <Skeleton width="70%" height={20} borderRadius={4} style={styles.titleSkeleton} />
-          <Skeleton width="50%" height={14} borderRadius={4} style={styles.dateSkeleton} />
-        </View>
-        <Skeleton width={32} height={32} borderRadius={16} />
+      {/* Card Header with Icon */}
+      <View style={styles.courseCardHeader}>
+        <Skeleton width={50} height={50} borderRadius={14} style={styles.courseIconSkeleton} />
+        <Skeleton width={32} height={32} borderRadius={8} />
       </View>
-      <View style={styles.courseContent}>
-        <Skeleton width="90%" height={16} borderRadius={4} style={styles.descriptionSkeleton} />
-        <Skeleton width="75%" height={16} borderRadius={4} style={styles.descriptionSkeleton} />
+      
+      {/* Course Info */}
+      <View style={styles.courseInfoSkeleton}>
+        <Skeleton width="80%" height={18} borderRadius={4} style={styles.titleSkeleton} />
+        <Skeleton width="60%" height={14} borderRadius={4} style={styles.descriptionSkeleton} />
       </View>
+      
+      {/* Course Meta Badges */}
       <View style={styles.courseMeta}>
-        <Skeleton width={40} height={24} borderRadius={12} />
-        <Skeleton width={50} height={24} borderRadius={12} />
+        <Skeleton width={50} height={28} borderRadius={8} />
+        <Skeleton width={50} height={28} borderRadius={8} />
+        <Skeleton width={60} height={28} borderRadius={8} />
       </View>
     </View>
   );
@@ -160,6 +163,23 @@ export const SubjectsSkeleton = () => {
           </View>
         </View>
       ))}
+    </View>
+  );
+};
+
+/**
+ * Skeleton component for Progress Bar
+ */
+export const ProgressBarSkeleton = ({ showLabel = true, showPercentage = true }) => {
+  return (
+    <View style={styles.progressBarSkeleton}>
+      {showLabel && (
+        <View style={styles.progressBarHeaderSkeleton}>
+          <Skeleton width="40%" height={13} borderRadius={4} />
+          {showPercentage && <Skeleton width={30} height={13} borderRadius={4} />}
+        </View>
+      )}
+      <Skeleton width="100%" height={8} borderRadius={4} />
     </View>
   );
 };
@@ -256,11 +276,18 @@ export const SkeletonList = ({
 const styles = StyleSheet.create({
   // Video Card Skeleton
   videoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 16,
     gap: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -289,11 +316,18 @@ const styles = StyleSheet.create({
 
   // Audio Card Skeleton
   audioCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 16,
     gap: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   audioInfo: {
     flex: 1,
@@ -347,31 +381,33 @@ const styles = StyleSheet.create({
 
   // Course Card Skeleton
   courseCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: SIZES.padding,
-    marginBottom: SIZES.base,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  courseHeader: {
+  courseCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SIZES.base,
+    marginBottom: 16,
   },
-  courseInfo: {
-    flex: 1,
+  courseIconSkeleton: {
+    backgroundColor: '#F3F4F6',
   },
-  courseContent: {
-    marginBottom: SIZES.base,
-    gap: 6,
-  },
-  descriptionSkeleton: {
-    marginTop: 4,
+  courseInfoSkeleton: {
+    marginBottom: 16,
   },
   courseMeta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
 
@@ -509,5 +545,17 @@ const styles = StyleSheet.create({
   },
   chartSkeleton: {
     marginTop: SIZES.base,
+  },
+
+  // Progress Bar Skeleton
+  progressBarSkeleton: {
+    width: '100%',
+    marginBottom: 8,
+  },
+  progressBarHeaderSkeleton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
 });

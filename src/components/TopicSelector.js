@@ -30,11 +30,11 @@ const TopicSelector = ({ selectedTopic, onTopicChange, topics = [], style, textC
 
     const getIconName = (topicId) => {
         switch (topicId) {
-            case 'travel': return 'airplane';
-            case 'food': return 'restaurant';
-            case 'business': return 'briefcase';
-            case 'shopping': return 'cart';
-            case 'health': return 'fitness';
+            case 'directions': return 'map';
+            case 'accommodation': return 'bed';
+            case 'greetings': return 'hand-left';
+            case 'ordering': return 'restaurant';
+            case 'food': return 'fast-food';
             default: return 'book'; // Default icon
         }
     };

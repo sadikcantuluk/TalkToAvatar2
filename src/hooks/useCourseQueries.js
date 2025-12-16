@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context';
 import coursesAPI from '../services/coursesAPI';
+import userTopicProgressAPI from '../services/userTopicProgressAPI';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { withPerformanceMonitor, logAPICall } from '../utils/queryCacheLogger';
 
@@ -22,6 +23,7 @@ export const courseKeys = {
   reports: (courseId) => [...courseKeys.all, 'reports', courseId],
   analyses: (courseId) => [...courseKeys.all, 'analyses', courseId],
   progress: (courseId) => [...courseKeys.all, 'progress', courseId],
+  topicProgress: (courseId) => [...courseKeys.all, 'topicProgress', courseId],
 };
 
 /**
@@ -396,6 +398,82 @@ export const useCourseProgress = (courseId) => {
 };
 
 /**
+ * Get topic progress for a course
+ */
+export const useTopicProgress = (courseId) => {
+  const { token, logout } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useQuery({
+    queryKey: courseKeys.topicProgress(courseId),
+    queryFn: withPerformanceMonitor(async () => {
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+      
+      console.log(`📤 [useTopicProgress] Fetching topic progress for course ${courseId}...`);
+      const startTime = Date.now();
+      try {
+        const data = await userTopicProgressAPI.getByCourse(token, courseId);
+        const duration = Date.now() - startTime;
+        logAPICall(`GET /courses/${courseId}/topic_progress`, duration);
+        console.log('✅ [useTopicProgress] Topic progress fetched', `(${duration}ms)`);
+        return data;
+      } catch (error) {
+        // Handle 404 - course not found
+        if (error?.response?.status === 404 || error?.status === 404) {
+          console.warn(`⚠️ [useTopicProgress] Course ${courseId} not found`);
+          queryClient.removeQueries(courseKeys.topicProgress(courseId));
+          return { topic_progress: [] };
+        }
+        if (error?.response?.status === 401 || error?.status === 401 || error?.error === 'Unauthorized') {
+          console.error('❌ [useTopicProgress] Unauthorized - logging out user');
+          logout();
+          throw new Error('Session expired. Please login again.');
+        }
+        const errorMessage = error?.response?.data?.error || error?.error || error?.message || 'Failed to fetch topic progress';
+        throw new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
+      }
+    }, `useTopicProgress-${courseId}`),
+    enabled: !!token && !!courseId,
+    staleTime: 30 * 1000, // 30 seconds - progress updates frequently
+    cacheTime: 2 * 60 * 1000,
+    retry: (failureCount, error) => {
+      if (error?.message?.includes('Session expired') || error?.message?.includes('Unauthorized')) {
+        return false;
+      }
+      if (error?.response?.status === 404 || error?.status === 404) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+};
+
+/**
+ * Update topic progress mutation
+ */
+export const useUpdateTopicProgress = () => {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ courseId, topic }) => {
+      console.log(`📤 [useUpdateTopicProgress] Updating topic progress for ${topic}...`);
+      const response = await userTopicProgressAPI.update(token, courseId, topic);
+      console.log('✅ [useUpdateTopicProgress] Topic progress updated');
+      return response;
+    },
+    onSuccess: (data, variables) => {
+      // Invalidate topic progress and general progress to refetch
+      queryClient.invalidateQueries(courseKeys.topicProgress(variables.courseId));
+      queryClient.invalidateQueries(courseKeys.progress(variables.courseId));
+      queryClient.invalidateQueries(courseKeys.subjects(variables.courseId));
+    },
+  });
+};
+
+/**
  * Create a new course (with optimistic update)
  */
 export const useCreateCourse = () => {
@@ -511,9 +589,16 @@ export const useDeleteCourse = (onMutateCallback) => {
 
   return useMutation({
     mutationFn: async (courseId) => {
+      // Delete from backend - await but don't block UI (optimistic update already happened)
       console.log(`📤 [useDeleteCourse] Deleting course ${courseId} from backend...`);
-      await coursesAPI.delete(token, courseId);
-      console.log('✅ [useDeleteCourse] Course deleted from backend');
+      try {
+        await coursesAPI.delete(token, courseId);
+        console.log('✅ [useDeleteCourse] Course deleted from backend');
+      } catch (error) {
+        console.error('❌ [useDeleteCourse] Backend delete failed:', error);
+        // Re-throw so onError can handle it and rollback
+        throw error;
+      }
     },
     onMutate: async (courseId) => {
       console.log(`🔄 [useDeleteCourse] Optimistically removing course ${courseId}...`);
@@ -569,10 +654,12 @@ export const useDeleteCourse = (onMutateCallback) => {
       };
     },
     onError: (err, courseId, context) => {
-      console.error('❌ [useDeleteCourse] Error:', err);
-      // Rollback on error
+      console.error('❌ [useDeleteCourse] Error deleting course:', err);
+      
+      // Rollback optimistic update on error
       if (context?.previousList) {
         queryClient.setQueryData(courseKeys.list(userId), context.previousList);
+        console.log('🔄 [useDeleteCourse] Rolled back course list');
       }
       if (context?.previousDetail) {
         queryClient.setQueryData(courseKeys.detail(courseId), context.previousDetail);
@@ -592,11 +679,21 @@ export const useDeleteCourse = (onMutateCallback) => {
       if (context?.previousProgress) {
         queryClient.setQueryData(courseKeys.progress(courseId), context.previousProgress);
       }
+      
+      // Re-throw error so component can handle it
+      throw err;
     },
     onSuccess: (data, courseId) => {
       console.log(`✅ [useDeleteCourse] Course ${courseId} successfully deleted`);
-      // Invalidate list to ensure consistency
-      queryClient.invalidateQueries(courseKeys.list(userId));
+      // Don't invalidate - optimistic update already removed it from cache
+      // Invalidating would cause a refetch and show skeleton
+      // Just ensure cache is clean
+      queryClient.removeQueries(courseKeys.detail(courseId));
+      queryClient.removeQueries(courseKeys.subjects(courseId));
+      queryClient.removeQueries(courseKeys.recordings(courseId));
+      queryClient.removeQueries(courseKeys.reports(courseId));
+      queryClient.removeQueries(courseKeys.analyses(courseId));
+      queryClient.removeQueries(courseKeys.progress(courseId));
     },
   });
 };

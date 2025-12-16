@@ -1,11 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions, StatusBar } from 'react-native';
 import { COLORS, SIZES, FONTS } from '../constants';
 import { useAuth } from '../context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const LOGO_TEXT = 'TalkToAvatar';
+
+// Theme matching DashboardScreen.js
+const THEME = {
+  primary: '#2D7F83',
+  background: '#F9FAFB', // Light gray background
+  text: '#1F2937',
+  textSecondary: '#6B7280',
+};
 
 const SplashScreen = ({ navigation }) => {
   const [displayedText, setDisplayedText] = useState('');
@@ -88,6 +96,7 @@ const SplashScreen = ({ navigation }) => {
         },
       ]}
     >
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
       <View style={styles.contentContainer}>
         {/* Logo Text with Typing Animation */}
         <View style={styles.logoContainer}>
@@ -108,7 +117,7 @@ const SplashScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: THEME.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -126,18 +135,18 @@ const styles = StyleSheet.create({
     fontSize: SCREEN_WIDTH < 375 ? 42 : SCREEN_WIDTH < 414 ? 48 : 56,
     fontWeight: '700',
     fontFamily: FONTS.bold,
-    color: COLORS.primary,
+    color: THEME.primary,
     letterSpacing: -1,
     textAlign: 'center',
-    // Subtle text shadow for depth
-    textShadowColor: 'rgba(19, 127, 236, 0.3)',
+    // Subtle text shadow for depth - lighter shadow for light theme
+    textShadowColor: 'rgba(45, 127, 131, 0.2)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+    textShadowRadius: 4,
   },
   cursor: {
     fontSize: SCREEN_WIDTH < 375 ? 42 : SCREEN_WIDTH < 414 ? 48 : 56,
     fontWeight: '300',
-    color: COLORS.primary,
+    color: THEME.primary,
     opacity: 0.8,
   },
 });

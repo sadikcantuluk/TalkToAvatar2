@@ -14,7 +14,6 @@ export { default as TravelAssistantScreen } from './TravelAssistantScreen';
 export { default as VideoViewingScreen } from './VideoViewingScreen';
 export { default as PastAudioListScreen } from './PastAudioListScreen';
 export { default as PastVideosListScreen } from './PastVideosListScreen';
-export { default as SualingoScreen } from './SualingoScreen';
 export { default as PastRecordingsListScreen } from './PastRecordingsListScreen';
 export { default as CoursesScreen } from './CoursesScreen';
 export { default as CourseDetailScreen } from './CourseDetailScreen';

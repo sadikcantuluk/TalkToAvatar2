@@ -238,17 +238,31 @@ const CoursesScreen = ({ navigation }) => {
 
     console.log('🔄 [DEBUG] Starting course deletion...');
 
-    // Close dialog immediately (optimistic update)
+    // Close dialog immediately (optimistic update will remove course from UI)
     setDeleteConfirmVisible(false);
     const courseToDeleteId = courseToDelete.id;
+    const courseToDeleteTitle = courseToDelete.title;
     setCourseToDelete(null);
 
     // Delete course (optimistic update handled by React Query)
-    // Backend deletion happens in background
+    // Course will be removed from UI immediately, backend deletion happens in background
+    // IMPORTANT: Do not call refetch() - optimistic update already removed course from cache
     deleteCourseMutation.mutate(courseToDeleteId, {
       onError: (err) => {
         console.error('❌ [ERROR] Course deletion failed:', err);
-        Alert.alert('Error', err.message || 'Failed to delete course');
+        // Show error and restore course in UI (rollback already happened in hook)
+        Alert.alert(
+          'Error',
+          `Failed to delete "${courseToDeleteTitle}". Please try again.`,
+          [{ text: 'OK' }]
+        );
+        // Note: Rollback already happened in useDeleteCourse hook
+      },
+      onSuccess: () => {
+        console.log('✅ [SUCCESS] Course deleted successfully');
+        // Course already removed from UI via optimistic update
+        // Do NOT call refetch() here - it would cause skeleton loading
+        // Backend deletion is already complete, cache is already updated
       },
     });
   };
@@ -443,7 +457,9 @@ const CoursesScreen = ({ navigation }) => {
         </View>
 
         {loading || isInitialLoad ? (
-          renderSkeleton()
+          <View style={styles.skeletonWrapper}>
+            {renderSkeleton()}
+          </View>
         ) : (courses || []).length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="school-outline" size={80} color="#D1D5DB" />
@@ -804,12 +820,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   // Skeleton styles
+  skeletonWrapper: {
+    flex: 1,
+    paddingTop: 8,
+  },
   skeletonContainer: {
     padding: 24,
+    paddingTop: 8,
   },
   skeletonItem: {
-    height: 140,
-    borderRadius: 20,
     marginBottom: 16,
   },
   statusBadge: {

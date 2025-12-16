@@ -110,84 +110,92 @@ const PastVideosListScreen = ({ navigation }) => {
         <Text style={styles.headerTitle}>Generated Videos</Text>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={COLORS.primary}
-          />
-        }
-      >
-        {loading ? (
+      {loading && !refreshing ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+        >
           <SkeletonList
             count={3}
             renderSkeleton={() => <VideoCardSkeleton />}
             itemStyle={{ marginBottom: 16 }}
+            containerStyle={{ paddingTop: 8 }}
           />
-        ) : videoItems.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="videocam-off-outline" size={64} color={COLORS.gray[600]} />
-            <Text style={styles.emptyTitle}>No Videos Yet</Text>
-            <Text style={styles.emptyDescription}>
-              Your generated videos will appear here
-            </Text>
-          </View>
-        ) : (
-          videoItems.map(item => (
-            <View key={item.id} style={styles.videoCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.videoInfo}>
-                  <Text style={styles.videoTitle}>{item.name}</Text>
-                  <Text style={styles.videoDate}>{formatDate(item.createdAt)}</Text>
-                  <View style={styles.badgeContainer}>
-                    <View style={styles.languageBadge}>
-                      <Ionicons name="language" size={14} color="#0369A1" />
-                      <Text style={styles.languageBadgeText}>
-                        {item.language.toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.voiceBadge}>
-                      <Ionicons name="mic-outline" size={14} color="#6B21A8" />
-                      <Text style={styles.voiceBadgeText}>
-                        {item.voice}
-                      </Text>
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={COLORS.primary}
+            />
+          }
+        >
+          {videoItems.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="videocam-off-outline" size={64} color={COLORS.gray[600]} />
+              <Text style={styles.emptyTitle}>No Videos Yet</Text>
+              <Text style={styles.emptyDescription}>
+                Your generated videos will appear here
+              </Text>
+            </View>
+          ) : (
+            videoItems.map(item => (
+              <View key={item.id} style={styles.videoCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.videoInfo}>
+                    <Text style={styles.videoTitle}>{item.name}</Text>
+                    <Text style={styles.videoDate}>{formatDate(item.createdAt)}</Text>
+                    <View style={styles.badgeContainer}>
+                      <View style={styles.languageBadge}>
+                        <Ionicons name="language" size={14} color="#0369A1" />
+                        <Text style={styles.languageBadgeText}>
+                          {item.language.toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.voiceBadge}>
+                        <Ionicons name="mic-outline" size={14} color="#6B21A8" />
+                        <Text style={styles.voiceBadgeText}>
+                          {item.voice}
+                        </Text>
+                      </View>
                     </View>
                   </View>
+                  <View style={styles.thumbnail}>
+                    <Ionicons name="videocam" size={24} color="#2D7F83" />
+                  </View>
                 </View>
-                <View style={styles.thumbnail}>
-                  <Ionicons name="videocam" size={24} color="#2D7F83" />
+                <View style={styles.cardActions}>
+                  <Button
+                    title="Watch"
+                    variant="primary"
+                    style={styles.actionBtn}
+                    icon={<Ionicons name="play-circle" size={20} color={COLORS.white} />}
+                    onPress={() => handleWatch(item)}
+                  />
+                  <Button
+                    title="Use"
+                    variant="secondary"
+                    style={styles.actionBtn}
+                    icon={<Ionicons name="create" size={20} color="#374151" />}
+                    onPress={() => handleUse(item)}
+                  />
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDelete(item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  </TouchableOpacity>
                 </View>
               </View>
-              <View style={styles.cardActions}>
-                <Button
-                  title="Watch"
-                  variant="primary"
-                  style={styles.actionBtn}
-                  icon={<Ionicons name="play-circle" size={20} color={COLORS.white} />}
-                  onPress={() => handleWatch(item)}
-                />
-                <Button
-                  title="Use"
-                  variant="secondary"
-                  style={styles.actionBtn}
-                  icon={<Ionicons name="create" size={20} color="#374151" />}
-                  onPress={() => handleUse(item)}
-                />
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDelete(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 };

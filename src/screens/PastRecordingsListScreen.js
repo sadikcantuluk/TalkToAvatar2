@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,11 +29,136 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const PastRecordingsListScreen = ({ navigation }) => {
+const THEME = {
+  primary: '#2D7F83',
+  background: '#F9FAFB', // Light gray background - matches dashboard
+  cardBg: '#FFFFFF',
+  text: '#1F2937',
+  textSecondary: '#6B7280',
+};
+
+const MAX_RECORDINGS = 10;
+
+const PastRecordingsListScreen = ({ navigation, route }) => {
+  const { courseId } = route?.params || {};
   const { token, user } = useAuth();
   const { data: recordings, loading: isLoading, setData: setRecordings } = useUserData('recordings');
   const [playingId, setPlayingId] = useState(null);
   const [showReportDetails, setShowReportDetails] = useState({});
+
+  // Debug: Log recordings state
+  useEffect(() => {
+    console.log('[PastRecordings] Component mounted/updated');
+    console.log('[PastRecordings] User ID:', user?.id);
+    console.log('[PastRecordings] Course ID:', courseId);
+    console.log('[PastRecordings] Recordings count:', recordings?.length || 0);
+    console.log('[PastRecordings] Recordings data:', recordings);
+    console.log('[PastRecordings] Loading state:', isLoading);
+  }, [recordings, isLoading, user?.id, courseId]);
+
+  // Filter recordings by courseId if provided, and limit to 10 most recent
+  const filteredAndLimitedRecordings = useMemo(() => {
+    console.log('[PastRecordings] Filtering recordings...');
+    let filtered = recordings || [];
+    console.log('[PastRecordings] Initial recordings count:', filtered.length);
+    
+    // Filter by courseId if provided
+    // IMPORTANT: If a recording doesn't have courseId/course_id, show it for all courses (general practice)
+    if (courseId) {
+      const beforeFilter = filtered.length;
+      filtered = filtered.filter(r => {
+        const recordingCourseId = r.courseId || r.course_id;
+        // Show recording if:
+        // 1. It matches the courseId, OR
+        // 2. It has no courseId (general practice recording)
+        return recordingCourseId === courseId || !recordingCourseId;
+      });
+      console.log('[PastRecordings] After courseId filter:', filtered.length, '(was:', beforeFilter, ')');
+      console.log('[PastRecordings] CourseId filter details:', {
+        courseId,
+        sampleRecording: filtered[0] ? {
+          id: filtered[0].id,
+          courseId: filtered[0].courseId,
+          course_id: filtered[0].course_id
+        } : null,
+        allRecordingsCourseIds: (recordings || []).map(r => ({
+          id: r.id,
+          courseId: r.courseId,
+          course_id: r.course_id
+        }))
+      });
+    }
+    
+    // Sort by date (newest first) and limit to 10
+    filtered = filtered
+      .sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.created_at || 0);
+        const dateB = new Date(b.createdAt || b.created_at || 0);
+        return dateB - dateA;
+      })
+      .slice(0, MAX_RECORDINGS);
+    
+    console.log('[PastRecordings] Final filtered count:', filtered.length);
+    console.log('[PastRecordings] Filtered recordings:', filtered.map(r => ({
+      id: r.id,
+      name: r.name,
+      createdAt: r.createdAt || r.created_at,
+      courseId: r.courseId || r.course_id
+    })));
+    
+    return filtered;
+  }, [recordings, courseId]);
+
+  // Cleanup old recordings when recordings change
+  useEffect(() => {
+    const cleanupOldRecordings = async () => {
+      if (!user?.id || !recordings || recordings.length <= MAX_RECORDINGS) return;
+
+      try {
+        // Sort by date and keep only the 10 most recent
+        const sorted = [...recordings].sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.created_at || 0);
+          const dateB = new Date(b.createdAt || b.created_at || 0);
+          return dateB - dateA;
+        });
+
+        const toKeep = sorted.slice(0, MAX_RECORDINGS);
+        const toDelete = sorted.slice(MAX_RECORDINGS);
+
+        // Update local storage
+        const key = getUserStorageKey('@sualingo_recordings_history', user.id);
+        await AsyncStorage.setItem(key, JSON.stringify(toKeep));
+        setRecordings(toKeep);
+
+        // Delete old recordings from backend
+        if (token && toDelete.length > 0) {
+          toDelete.forEach(async (recording) => {
+            if (recording.backend_id) {
+              try {
+                await recordingsAPI.delete(token, recording.backend_id);
+                console.log('✅ Old recording deleted from backend:', recording.id);
+              } catch (error) {
+                // Handle 404 gracefully - record was already deleted, which is fine
+                if (error?.response?.status === 404 || error?.status === 404) {
+                  // Silently ignore 404 - record already deleted, which is the desired state
+                  console.log('ℹ️ Recording already deleted from backend:', recording.id);
+                } else {
+                  // Log other errors
+                  console.error('⚠️ Failed to delete old recording from backend:', error);
+                }
+              }
+            }
+          });
+        }
+
+        console.log(`✅ Cleaned up ${toDelete.length} old recordings. Keeping ${toKeep.length} most recent.`);
+      } catch (error) {
+        console.error('❌ Error cleaning up old recordings:', error);
+      }
+    };
+
+    cleanupOldRecordings();
+  }, [recordings, user?.id, token, setRecordings]);
 
   useEffect(() => {
     return () => {
@@ -87,8 +213,8 @@ const PastRecordingsListScreen = ({ navigation }) => {
               // Delete from local storage
               const newRecordings = recordings.filter(r => r.id !== recording.id);
               setRecordings(newRecordings);
-               const key = getUserStorageKey('@sualingo_recordings_history', user.id);
-               await AsyncStorage.setItem(key, JSON.stringify(newRecordings));
+              const key = getUserStorageKey('@sualingo_recordings_history', user.id);
+              await AsyncStorage.setItem(key, JSON.stringify(newRecordings));
               
               console.log('✅ Recording deleted locally. Remaining items:', newRecordings.length);
               
@@ -138,154 +264,95 @@ const PastRecordingsListScreen = ({ navigation }) => {
 
   const renderRecordingItem = ({ item }) => {
     return (
-    <View style={styles.recordingCard}>
-      <View style={styles.recordingHeader}>
-        <View style={styles.recordingInfo}>
-          <Text style={styles.recordingName}>{item.name}</Text>
-          <Text style={styles.recordingDate}>{formatDate(item.createdAt)}</Text>
+      <TouchableOpacity
+        style={styles.recordingCard}
+        onPress={() => toggleReport(item.id)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.recordingHeader}>
+          <View style={styles.recordingInfo}>
+            <Text style={styles.recordingName}>{item.name || 'Recording'}</Text>
+            <Text style={styles.recordingDate}>{formatDate(item.createdAt || item.created_at)}</Text>
+          </View>
+          <View
+            style={[
+              styles.scoreBadge,
+              { 
+                backgroundColor: (item.pronunciationScore || item.score || 0) >= 85 ? '#10b981' :
+                                 (item.pronunciationScore || item.score || 0) >= 70 ? '#f59e0b' : '#ef4444'
+              },
+            ]}
+          >
+            <Text style={styles.scoreText}>{item.pronunciationScore || item.score || 0}%</Text>
+          </View>
         </View>
-        <View
-          style={[
-            styles.scoreBadge,
-            { 
-              backgroundColor: (item.pronunciationScore || item.score || 0) >= 85 ? '#10b981' :
-                               (item.pronunciationScore || item.score || 0) >= 70 ? '#f59e0b' : '#ef4444'
-            },
-          ]}
-        >
-          <Text style={styles.scoreText}>{item.pronunciationScore || item.score || 0}%</Text>
-        </View>
-      </View>
 
-      <View style={styles.recordingContent}>
-        <Text style={styles.levelLabel}>Level: {item.level}</Text>
-        <Text style={styles.sentenceText} numberOfLines={2}>
-          "{item.sentence}"
-        </Text>
-      </View>
-
-      <View style={styles.recordingActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionButtonPlay]}
-          onPress={() => handlePlayRecording(item)}
-        >
-          <Ionicons
-            name={playingId === item.id ? 'pause-circle' : 'play-circle'}
-            size={20}
-            color={COLORS.white}
-          />
-          <Text style={styles.actionButtonText}>
-            {playingId === item.id ? 'Pause' : 'Play'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionButtonInfo]}
-          onPress={() => toggleReport(item.id)}
-        >
-          <Ionicons name="stats-chart" size={20} color={COLORS.white} />
-          <Text style={styles.actionButtonText}>
-            {showReportDetails[item.id] ? 'Raporu Gizle' : 'Raporu Gör'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionButtonDelete]}
-          onPress={() => handleDeleteRecording(item)}
-        >
-          <Ionicons name="trash-outline" size={20} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Inline Report Details */}
-      {showReportDetails[item.id] && (
-        <View style={styles.reportDetailsContainer}>
-          <PronunciationResult
-            overallScore={item.pronunciation_score || item.score || 0}
-            accuracy={item.accuracy || item.accuracy_score}
-            fluency={item.fluency || item.fluency_score}
-            completeness={item.completeness || item.completeness_score}
-            words={item.words || item.word_level_details || []}
-            transcript={item.user_transcript || item.transcript || item.userTranscript || ''}
-            referenceText={item.reference_text || item.sentence || ''}
-            showTitle={true}
-          />
-          
-          {/* Detailed Scores - 3 temel score progress bar'ları */}
-          {((item.accuracy !== undefined && item.accuracy !== null) || 
-            (item.accuracy_score !== undefined && item.accuracy_score !== null) ||
-            (item.fluency !== undefined && item.fluency !== null) || 
-            (item.fluency_score !== undefined && item.fluency_score !== null) ||
-            (item.completeness !== undefined && item.completeness !== null) || 
-            (item.completeness_score !== undefined && item.completeness_score !== null)) && (
-            <View style={styles.detailedScoresContainer}>
-              {(item.accuracy !== undefined && item.accuracy !== null) || (item.accuracy_score !== undefined && item.accuracy_score !== null) ? (
-                <View style={styles.detailedScoreItem}>
-                  <Text style={styles.detailedScoreLabel}>Accuracy</Text>
-                  <View style={styles.detailedScoreBar}>
-                    <View 
-                      style={[
-                        styles.detailedScoreBarFill,
-                        { width: `${item.accuracy || item.accuracy_score || 0}%` }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.detailedScoreValue}>{item.accuracy || item.accuracy_score || 0}%</Text>
-                </View>
-              ) : null}
-              {(item.fluency !== undefined && item.fluency !== null) || (item.fluency_score !== undefined && item.fluency_score !== null) ? (
-                <View style={styles.detailedScoreItem}>
-                  <Text style={styles.detailedScoreLabel}>Fluency</Text>
-                  <View style={styles.detailedScoreBar}>
-                    <View 
-                      style={[
-                        styles.detailedScoreBarFill,
-                        { width: `${item.fluency || item.fluency_score || 0}%` }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.detailedScoreValue}>{item.fluency || item.fluency_score || 0}%</Text>
-                </View>
-              ) : null}
-              {(item.completeness !== undefined && item.completeness !== null) || (item.completeness_score !== undefined && item.completeness_score !== null) ? (
-                <View style={styles.detailedScoreItem}>
-                  <Text style={styles.detailedScoreLabel}>Completeness</Text>
-                  <View style={styles.detailedScoreBar}>
-                    <View 
-                      style={[
-                        styles.detailedScoreBarFill,
-                        { width: `${item.completeness || item.completeness_score || 0}%` }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.detailedScoreValue}>{item.completeness || item.completeness_score || 0}%</Text>
-                </View>
-              ) : null}
-            </View>
+        <View style={styles.recordingContent}>
+          {item.level && (
+            <Text style={styles.levelLabel}>Level: {item.level}</Text>
           )}
-          
-          {/* You said transcript section */}
-          {(item.user_transcript || item.transcript || item.userTranscript) && (
-            <View style={styles.transcriptSection}>
-              <Text style={styles.transcriptLabel}>You said:</Text>
-              <Text style={styles.transcriptText}>"{item.user_transcript || item.transcript || item.userTranscript}"</Text>
-            </View>
-          )}
+          <Text style={styles.sentenceText} numberOfLines={2}>
+            "{item.sentence || item.reference_text || 'No sentence available'}"
+          </Text>
         </View>
-      )}
-    </View>
+
+        <View style={styles.recordingActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.actionButtonPlay]}
+            onPress={(e) => {
+              e.stopPropagation(); // Prevent card tap
+              handlePlayRecording(item);
+            }}
+          >
+            <Ionicons
+              name={playingId === item.id ? 'pause-circle' : 'play-circle'}
+              size={20}
+              color={THEME.cardBg}
+            />
+            <Text style={styles.actionButtonText}>
+              {playingId === item.id ? 'Pause' : 'Play'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.actionButtonDelete]}
+            onPress={(e) => {
+              e.stopPropagation(); // Prevent card tap
+              handleDeleteRecording(item);
+            }}
+          >
+            <Ionicons name="trash-outline" size={20} color={THEME.cardBg} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Inline Report Details */}
+        {showReportDetails[item.id] && (
+          <View style={styles.reportDetailsContainer}>
+            <PronunciationResult
+              overallScore={item.pronunciation_score || item.score || 0}
+              accuracy={item.accuracy || item.accuracy_score}
+              fluency={item.fluency || item.fluency_score}
+              completeness={item.completeness || item.completeness_score}
+              words={item.words || item.word_level_details || []}
+              transcript={item.user_transcript || item.transcript || item.userTranscript || ''}
+              referenceText={item.reference_text || item.sentence || ''}
+              showTitle={true}
+            />
+          </View>
+        )}
+      </TouchableOpacity>
     );
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textLight} />
+          <Ionicons name="arrow-back" size={24} color={THEME.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Past Recordings</Text>
         <View style={styles.placeholder} />
@@ -303,9 +370,9 @@ const PastRecordingsListScreen = ({ navigation }) => {
             itemStyle={{ marginBottom: 16 }}
           />
         </ScrollView>
-      ) : recordings.length === 0 ? (
+      ) : filteredAndLimitedRecordings.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="mic-off-outline" size={64} color={COLORS.gray[600]} />
+          <Ionicons name="mic-off-outline" size={64} color={THEME.textSecondary} />
           <Text style={styles.emptyTitle}>No Recordings Yet</Text>
           <Text style={styles.emptyText}>
             Start practicing to see your recordings here
@@ -319,31 +386,30 @@ const PastRecordingsListScreen = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={recordings}
+          data={filteredAndLimitedRecordings}
           keyExtractor={(item) => item.id}
           renderItem={renderRecordingItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundDark,
+    backgroundColor: THEME.background, // Light background - matches dashboard
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SIZES.padding,
-    paddingTop: 48,
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'android' ? 30 : 10,
     paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148, 163, 184, 0.1)',
+    backgroundColor: THEME.background, // Light background - matches dashboard
   },
   backButton: {
     width: 40,
@@ -352,9 +418,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: SIZES.h3,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: THEME.text, // Dark text - matches dashboard
   },
   placeholder: {
     width: 40,
@@ -369,18 +435,14 @@ const styles = StyleSheet.create({
     padding: 40,
     gap: 16,
   },
-  loadingText: {
-    fontSize: SIZES.body2,
-    color: COLORS.gray[400],
-  },
   emptyTitle: {
-    fontSize: SIZES.h3,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: THEME.text, // Dark text
   },
   emptyText: {
-    fontSize: SIZES.body2,
-    color: COLORS.gray[400],
+    fontSize: 14,
+    color: THEME.textSecondary, // Secondary text
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -388,24 +450,27 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: COLORS.primary,
+    backgroundColor: THEME.primary,
     borderRadius: 24,
   },
   startButtonText: {
-    fontSize: SIZES.body2,
+    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.white,
+    color: THEME.cardBg,
   },
   listContent: {
-    padding: SIZES.padding,
+    padding: 24,
   },
   recordingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
+    backgroundColor: THEME.cardBg, // White card - matches dashboard
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   recordingHeader: {
     flexDirection: 'row',
@@ -417,14 +482,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   recordingName: {
-    fontSize: SIZES.body2,
+    fontSize: 16,
     fontWeight: '600',
-    color: COLORS.textLight,
+    color: THEME.text, // Dark text
     marginBottom: 4,
   },
   recordingDate: {
-    fontSize: SIZES.body4,
-    color: COLORS.gray[500],
+    fontSize: 12,
+    color: THEME.textSecondary, // Secondary text
   },
   scoreBadge: {
     paddingHorizontal: 12,
@@ -432,22 +497,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   scoreText: {
-    fontSize: SIZES.body3,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: THEME.cardBg,
   },
   recordingContent: {
     marginBottom: 12,
     gap: 8,
   },
   levelLabel: {
-    fontSize: SIZES.body3,
+    fontSize: 12,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: THEME.primary,
   },
   sentenceText: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[300],
+    fontSize: 14,
+    color: THEME.textSecondary,
     lineHeight: 20,
     fontStyle: 'italic',
   },
@@ -456,79 +521,32 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   actionButtonPlay: {
-    backgroundColor: COLORS.primary,
-  },
-  actionButtonInfo: {
-    backgroundColor: '#10b981',
+    backgroundColor: THEME.primary,
+    flex: 1,
   },
   actionButtonDelete: {
     flex: 0,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     backgroundColor: '#ef4444',
   },
   actionButtonText: {
-    fontSize: SIZES.body3,
+    fontSize: 12,
     fontWeight: '600',
-    color: COLORS.white,
+    color: THEME.cardBg,
   },
   // Report Details Styles
   reportDetailsContainer: {
     marginTop: 12,
-  },
-  detailedScoresContainer: {
-    marginTop: 12,
-    marginBottom: 16,
-    gap: 12,
-  },
-  detailedScoreItem: {
-    gap: 6,
-  },
-  detailedScoreLabel: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[400],
-    fontWeight: '500',
-  },
-  detailedScoreBar: {
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  detailedScoreBarFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 4,
-  },
-  detailedScoreValue: {
-    fontSize: SIZES.body3,
-    color: COLORS.textLight,
-    fontWeight: '600',
-    alignSelf: 'flex-end',
-  },
-  transcriptSection: {
-    padding: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  transcriptLabel: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[400],
-    marginBottom: 4,
-  },
-  transcriptText: {
-    fontSize: SIZES.body2,
-    color: COLORS.textLight,
-    fontStyle: 'italic',
   },
 });
 

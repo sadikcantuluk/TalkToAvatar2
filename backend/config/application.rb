@@ -46,6 +46,23 @@ module TalktoavatarBackend
     config.generators do |g|
       g.orm :active_record, primary_key_type: :uuid
     end
+
+    # Filter sensitive parameters from logs
+    # This is a base configuration, can be extended in initializers
+    config.filter_parameters += [
+      :password,
+      :password_confirmation,
+      :current_password,
+      :new_password,
+      :token,
+      :reset_token,
+      :code,
+      :verification_code,
+      :email_verification_code,
+      :auth_token,
+      :access_token,
+      :refresh_token
+    ]
   end
 end
 

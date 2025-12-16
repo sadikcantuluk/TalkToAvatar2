@@ -168,7 +168,7 @@ const PastAudioListScreen = ({ navigation }) => {
         <Text style={styles.headerTitle}>My Audio Library</Text>
       </View>
 
-      {isLoading ? (
+      {isLoading && !refreshing ? (
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
@@ -177,6 +177,7 @@ const PastAudioListScreen = ({ navigation }) => {
             count={3}
             renderSkeleton={() => <AudioCardSkeleton />}
             itemStyle={{ marginBottom: 16 }}
+            containerStyle={{ paddingTop: 8 }}
           />
         </ScrollView>
       ) : audioItems.length === 0 ? (

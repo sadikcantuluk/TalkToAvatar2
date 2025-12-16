@@ -124,12 +124,15 @@ const VoiceSelector = ({ selectedVoice, onVoiceChange, style, textColor, labelCo
               showsVerticalScrollIndicator={true}
             >
               {voices.map((voice) => (
-                <View key={voice.id} style={styles.voiceOptionWrapper}>
+                <View
+                  key={voice.id}
+                  style={[
+                    styles.voiceOptionWrapper,
+                    selectedVoice === voice.id && styles.voiceOptionSelected
+                  ]}
+                >
                   <TouchableOpacity
-                    style={[
-                      styles.voiceOption,
-                      selectedVoice === voice.id && styles.voiceOptionSelected,
-                    ]}
+                    style={styles.voiceOption}
                     onPress={() => handleSelect(voice)}
                     activeOpacity={0.7}
                   >

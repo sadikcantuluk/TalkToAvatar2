@@ -240,7 +240,7 @@ export const generateTextToSpeech = async (text, voiceId, languageCode, skipTran
     const response = await axios.post(
       OPENAI_TTS_URL,
       {
-        model: 'tts-1-hd', // High quality model
+        model: 'tts-1', // Fast model for quick response (instead of tts-1-hd)
         voice: selectedVoice,
         input: finalText,
         speed: 1.0,
@@ -357,9 +357,18 @@ export const transcribeAudio = async (audioUri, language = 'en') => {
 // Translate text to target language
 export const translateText = async (text, targetLanguage) => {
   try {
+    // Validate inputs
+    if (!text || typeof text !== 'string') {
+      throw new Error('Text to translate is required and must be a string');
+    }
+    
+    if (!targetLanguage) {
+      throw new Error('Target language is required');
+    }
+    
     console.log('=== OpenAI Translation ===');
     console.log('Text to translate:', text.substring(0, 100) + '...');
-    console.log('Target language:', languageNames[targetLanguage]);
+    console.log('Target language:', languageNames[targetLanguage] || targetLanguage);
 
     if (!OPENAI_API_KEY) {
       throw new Error('OpenAI API key not found');
@@ -414,7 +423,7 @@ export const translateText = async (text, targetLanguage) => {
 };
 
 // Play audio from URI or base64
-export const playAudio = async (audioUri, onPlaybackComplete) => {
+export const playAudio = async (audioUri, onPlaybackComplete, onPlaybackStart) => {
   try {
     console.log('=== Playing Audio ===');
     console.log('Audio URI:', audioUri);
@@ -442,8 +451,19 @@ export const playAudio = async (audioUri, onPlaybackComplete) => {
     currentSound = sound;
     console.log('Audio playback started');
 
-    // Set up completion callback
+    // Set up status update callback
+    let playbackStarted = false;
     sound.setOnPlaybackStatusUpdate((status) => {
+      // Call onPlaybackStart when audio actually starts playing
+      if (!playbackStarted && status.isPlaying) {
+        playbackStarted = true;
+        console.log('✅ Audio is now playing');
+        if (onPlaybackStart) {
+          onPlaybackStart();
+        }
+      }
+      
+      // Call onPlaybackComplete when audio finishes
       if (status.didJustFinish) {
         console.log('Audio playback finished');
         sound.unloadAsync().catch(() => {});

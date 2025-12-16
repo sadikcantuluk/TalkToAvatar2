@@ -18,7 +18,6 @@ import {
   VideoViewingScreen,
   PastAudioListScreen,
   PastVideosListScreen,
-  SualingoScreen,
   PastRecordingsListScreen,
 } from '../screens';
 import CoursesScreen from '../screens/CoursesScreen';
@@ -61,7 +60,6 @@ const AppNavigator = () => {
         <Stack.Screen name="TextToSpeech" component={TextToSpeechScreen} />
         <Stack.Screen name="AvatarToVideo" component={AvatarToVideoScreen} />
         <Stack.Screen name="TravelAssistant" component={TravelAssistantScreen} />
-        <Stack.Screen name="Sualingo" component={SualingoScreen} />
         <Stack.Screen name="VideoViewing" component={VideoViewingScreen} />
         <Stack.Screen name="PastAudioList" component={PastAudioListScreen} />
         <Stack.Screen name="PastVideosList" component={PastVideosListScreen} />
