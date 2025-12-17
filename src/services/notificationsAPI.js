@@ -34,7 +34,8 @@ const notificationsAPI = {
   // Mark notification as read
   markAsRead: async (token, notificationId) => {
     try {
-      const response = await apiClient.patch(`/notifications/${notificationId}/mark_as_read`, {}, {
+      // Backend controller implements `mark_read`
+      const response = await apiClient.put(`/notifications/${notificationId}/mark_read`, {}, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

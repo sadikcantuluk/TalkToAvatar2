@@ -104,7 +104,8 @@ export const NotificationProvider = ({ children, authToken, authUser }) => {
             // Update with latest backend data
             return {
               ...localNotif,
-              read: backendNotif.read,
+              // Never regress local read=true to false due to backend sync
+              read: !!(localNotif.read || backendNotif.read),
               // Keep local id and other local properties
             };
           }
@@ -247,17 +248,46 @@ export const NotificationProvider = ({ children, authToken, authUser }) => {
   };
 
   const markAsRead = (notificationId) => {
-    const updated = notifications.map(n =>
-      n.id === notificationId ? { ...n, read: true } : n
-    );
-    setNotifications(updated);
-    saveNotifications(updated);
+    setNotifications(prev => {
+      const updated = prev.map(n => n.id === notificationId ? { ...n, read: true } : n);
+      saveNotifications(updated);
+      return updated;
+    });
+
+    // Persist to backend (best-effort) if possible
+    const notif = notifications.find(n => n.id === notificationId);
+    const backendId = notif?.backend_id;
+    if (token && user && backendId) {
+      Promise.resolve().then(async () => {
+        try {
+          await notificationsAPI.markAsRead(token, backendId);
+        } catch (e) {
+          // Ignore: local state already updated; sync merge rule prevents regression
+          console.warn('⚠️ [NotificationContext] Backend markAsRead failed:', e?.message || e);
+        }
+      });
+    }
   };
 
   const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updated);
-    saveNotifications(updated);
+    setNotifications(prev => {
+      const updated = prev.map(n => ({ ...n, read: true }));
+      saveNotifications(updated);
+      return updated;
+    });
+
+    // Best-effort backend sync for mark-all
+    if (token && user) {
+      Promise.resolve().then(async () => {
+        try {
+          // Backend supports mark_all_read; we can piggyback by calling markAsRead on each backend_id
+          const withBackend = notifications.filter(n => n.backend_id).map(n => n.backend_id);
+          await Promise.all(withBackend.map(id => notificationsAPI.markAsRead(token, id).catch(() => null)));
+        } catch (e) {
+          console.warn('⚠️ [NotificationContext] Backend markAllAsRead failed:', e?.message || e);
+        }
+      });
+    }
   };
 
   const deleteNotification = async (notificationId) => {

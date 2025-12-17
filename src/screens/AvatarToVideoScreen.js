@@ -22,6 +22,8 @@ import { useAuth, useToast } from '../context';
 import videosAPI from '../services/videosAPI';
 import notificationsAPI from '../services/notificationsAPI';
 import { getUserStorageKey } from '../utils/userStorage';
+import { useFocusEffect } from '@react-navigation/native';
+import { videoCreationJobService } from '../services/videoCreationJobService';
 
 const AvatarToVideoScreen = ({ navigation, route }) => {
   const { addNotification } = useNotifications();
@@ -40,6 +42,50 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [isCreating, setIsCreating] = useState(false);
   const [creationProgress, setCreationProgress] = useState('');
+  const [job, setJob] = useState(null);
+  const [progressPanelVisible, setProgressPanelVisible] = useState(false);
+
+  const STEP_LABELS = {
+    generating_speech: 'Generating speech',
+    uploading_audio: 'Uploading audio',
+    uploading_avatar: 'Uploading avatar',
+    generating_video: 'Creating video (this may take a few minutes)',
+    downloading_video: 'Downloading video',
+    saving: 'Saving',
+  };
+
+  const refreshJob = async () => {
+    if (!user?.id) return;
+    const current = await videoCreationJobService.getJob(user.id);
+    setJob(current);
+    setProgressPanelVisible(current?.status === 'running');
+    if (current?.status === 'running') {
+      setIsCreating(true);
+      setCreationProgress(current?.message || '');
+    }
+    if (current?.status === 'succeeded' || current?.status === 'failed') {
+      setIsCreating(false);
+      setCreationProgress('');
+    }
+  };
+
+  useEffect(() => {
+    refreshJob();
+    // Subscribe to in-memory updates (best effort)
+    const unsubscribe = videoCreationJobService.subscribe(user?.id, (next) => {
+      setJob(next);
+      setProgressPanelVisible(next?.status === 'running');
+    });
+    return unsubscribe;
+  }, [user?.id]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Re-sync from storage when coming back to this screen
+      refreshJob();
+      return undefined;
+    }, [user?.id])
+  );
 
   // Handle avatar selection from route params
   useEffect(() => {
@@ -203,157 +249,108 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
       return;
     }
 
+    if (!user?.id) {
+      showError('User not authenticated');
+      return;
+    }
+
     try {
       setIsCreating(true);
-      setCreationProgress('Generating speech...');
+      setProgressPanelVisible(true);
 
-      // Step 1: Generate audio using OpenAI TTS
-      console.log('Step 1: Generating TTS audio...');
-      const ttsResult = await generateTextToSpeech(
-        scriptText,
-        selectedVoice,
-        selectedLanguage
-      );
-
-      if (!ttsResult.success) {
-        throw new Error('Failed to generate speech');
-      }
-
-      console.log('✅ TTS audio generated:', ttsResult.audioUri);
-
-      // Get translated text for video prompt
-      const translatedText = ttsResult.translatedText || scriptText;
-      console.log('📝 Using translated text for video prompt');
-      console.log('Translated text:', translatedText.substring(0, 100) + '...');
-
-      // Step 2: Upload audio to Fal.ai
-      setCreationProgress('Uploading audio...');
-      console.log('Step 2: Uploading audio to Fal.ai...');
-      const audioUpload = await uploadToFal(
-        ttsResult.audioUri,
-        `audio_${Date.now()}.mp3`
-      );
-
-      if (!audioUpload.success) {
-        throw new Error('Failed to upload audio');
-      }
-
-      console.log('✅ Audio uploaded to Fal.ai storage:', audioUpload.url);
-
-      // Step 3: Upload avatar to Fal.ai storage
-      setCreationProgress('Uploading avatar...');
-      console.log('Step 3: Uploading avatar to Fal.ai storage...');
-
-      // Get avatar image URI
-      let avatarUri;
-      if (selectedAvatar.image.uri) {
-        // Custom avatar - already has URI
-        console.log('Custom avatar URI:', selectedAvatar.image.uri);
-        avatarUri = selectedAvatar.image.uri;
-      } else {
-        // Default avatar - need to resolve and copy
-        console.log('Default avatar - resolving asset...');
-
-        try {
-          const resolvedAsset = Image.resolveAssetSource(selectedAvatar.image);
-          console.log('Resolved asset:', resolvedAsset?.uri);
-
-          if (!resolvedAsset || !resolvedAsset.uri) {
-            throw new Error('Could not resolve default avatar');
+      await videoCreationJobService.start({
+        userId: user.id,
+        workflow: async ({ update }) => {
+          await update('generating_speech', 'Generating speech...');
+          setCreationProgress('Generating speech...');
+          const ttsResult = await generateTextToSpeech(scriptText, selectedVoice, selectedLanguage);
+          if (!ttsResult.success || !ttsResult.audioUri) {
+            throw new Error(ttsResult.error || 'Failed to generate speech');
           }
 
-          // Copy to writable location
-          const fileName = `avatar_default_${Date.now()}.jpg`;
-          const newUri = `${FileSystem.documentDirectory}${fileName}`;
+          const translatedText = ttsResult.translatedText || scriptText;
 
-          await FileSystem.downloadAsync(resolvedAsset.uri, newUri);
-          console.log('✅ Avatar copied to:', newUri);
-          avatarUri = newUri;
-        } catch (assetError) {
-          console.error('Error with default avatar:', assetError);
-          throw new Error('Failed to load default avatar image');
-        }
-      }
+          await update('uploading_audio', 'Uploading audio...');
+          setCreationProgress('Uploading audio...');
+          const audioUpload = await uploadToFal(ttsResult.audioUri, `audio_${Date.now()}.mp3`);
+          if (!audioUpload.success) {
+            throw new Error(audioUpload.error || 'Failed to upload audio');
+          }
 
-      console.log('Avatar URI ready:', avatarUri);
+          await update('uploading_avatar', 'Uploading avatar...');
+          setCreationProgress('Uploading avatar...');
+          let avatarUri;
+          if (selectedAvatar.image.uri) {
+            avatarUri = selectedAvatar.image.uri;
+          } else {
+            const resolvedAsset = Image.resolveAssetSource(selectedAvatar.image);
+            if (!resolvedAsset || !resolvedAsset.uri) {
+              throw new Error('Could not resolve default avatar');
+            }
+            const fileName = `avatar_default_${Date.now()}.jpg`;
+            const newUri = `${FileSystem.documentDirectory}${fileName}`;
+            await FileSystem.downloadAsync(resolvedAsset.uri, newUri);
+            avatarUri = newUri;
+          }
 
-      // Upload to Fal.ai storage
-      const imageUpload = await uploadToFal(
-        avatarUri,
-        `avatar_${Date.now()}.jpg`
-      );
+          const imageUpload = await uploadToFal(avatarUri, `avatar_${Date.now()}.jpg`);
+          if (!imageUpload.success) {
+            throw new Error(imageUpload.error || 'Failed to upload avatar');
+          }
 
-      if (!imageUpload.success) {
-        throw new Error(`Failed to upload avatar: ${imageUpload.error}`);
-      }
+          await update('generating_video', 'Creating video (this may take a few minutes)...');
+          setCreationProgress('Creating video (this may take a few minutes)...');
+          const videoResult = await generateVideo(imageUpload.url, audioUpload.url, translatedText);
+          if (!videoResult.success || !videoResult.videoUrl) {
+            throw new Error(videoResult.error || 'Failed to generate video');
+          }
 
-      console.log('✅ Avatar uploaded to Fal.ai storage:', imageUpload.url);
+          await update('downloading_video', 'Downloading video...');
+          setCreationProgress('Downloading video...');
+          const downloadResult = await downloadVideo(videoResult.videoUrl, `video_${Date.now()}.mp4`);
+          if (!downloadResult.success || !downloadResult.uri) {
+            throw new Error(downloadResult.error || 'Failed to download video');
+          }
 
-      // Step 4: Generate video
-      setCreationProgress('Creating video (this may take a few minutes)...');
-      console.log('Step 4: Generating video with Fal.ai...');
-      console.log('Using translated text as prompt');
-      const videoResult = await generateVideo(
-        imageUpload.url,
-        audioUpload.url,
-        translatedText  // Use translated text instead of original
-      );
+          await update('saving', 'Saving...');
+          setCreationProgress('Saving...');
+          const videoData = {
+            id: Date.now(),
+            name: outputName,
+            text: scriptText,
+            translatedText,
+            voice: selectedVoice,
+            language: selectedLanguage,
+            avatarName: selectedAvatar.name,
+            videoUri: downloadResult.uri,
+            videoUrl: videoResult.videoUrl,
+            createdAt: new Date().toISOString(),
+          };
 
-      if (!videoResult.success) {
-        throw new Error('Failed to generate video');
-      }
+          await saveVideoToHistory(videoData);
 
-      console.log('✅ Video generated:', videoResult.videoUrl);
+          addNotification({
+            type: 'video_ready',
+            title: 'Video Ready! 🎉',
+            message: `Your video "${outputName}" has been created successfully and is ready to watch.`,
+            videoData: videoData,
+            fromBackend: false,
+          });
 
-      // Step 5: Download video
-      setCreationProgress('Downloading video...');
-      console.log('Step 5: Downloading video...');
-      const fileName = `video_${Date.now()}.mp4`;
-      const downloadResult = await downloadVideo(videoResult.videoUrl, fileName);
-
-      if (!downloadResult.success) {
-        throw new Error('Failed to download video');
-      }
-
-      console.log('✅ Video downloaded:', downloadResult.uri);
-
-      // Step 6: Save to history
-      const videoData = {
-        id: Date.now(),
-        name: outputName,
-        text: scriptText,
-        translatedText: translatedText,  // Save translated text
-        voice: selectedVoice,
-        language: selectedLanguage,
-        avatarName: selectedAvatar.name,
-        videoUri: downloadResult.uri,
-        videoUrl: videoResult.videoUrl,
-        createdAt: new Date().toISOString(),
-      };
-
-      await saveVideoToHistory(videoData);
-
-      // Add notification for video ready (local)
-      // Note: addNotification already handles backend saving internally, so no need for duplicate call
-      addNotification({
-        type: 'video_ready',
-        title: 'Video Ready! 🎉',
-        message: `Your video "${outputName}" has been created successfully and is ready to watch.`,
-        videoData: videoData,
-        fromBackend: false, // Mark as frontend notification to prevent duplicates
+          return { videoData };
+        },
       });
 
       setIsCreating(false);
       setCreationProgress('');
-
-      console.log('✅ Video creation completed successfully!');
-      console.log('📢 Notification sent to user and backend');
+      setProgressPanelVisible(false);
     } catch (error) {
       console.error('=== Video Creation Error ===');
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
       setIsCreating(false);
       setCreationProgress('');
+      setProgressPanelVisible(false);
       Alert.alert('Error', `Failed to create video: ${error.message}`);
     }
   };
@@ -370,6 +367,62 @@ const AvatarToVideoScreen = ({ navigation, route }) => {
       navigation={navigation}
       showBackButton={true}
     >
+      {(progressPanelVisible || job?.status === 'running') && (
+        <View style={styles.progressOverlayContainer} pointerEvents="box-none">
+          <View style={styles.progressOverlayCard} pointerEvents="auto">
+            <View style={styles.progressModalHeader}>
+              <View style={styles.progressModalHeaderLeft}>
+                <Ionicons name="videocam" size={20} color="#2D7F83" />
+                <Text style={styles.progressModalTitle}>Creating your video</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  // Allow collapse, but keep Create disabled via isCreating while job is running
+                  setProgressPanelVisible(false);
+                }}
+                style={styles.progressModalClose}
+              >
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.progressModalSubtitle}>
+              Video creation started successfully. We'll notify you when it's ready.
+            </Text>
+
+            <View style={styles.progressStepList}>
+              {Object.entries(STEP_LABELS).map(([key, label]) => {
+                const isActive = job?.status === 'running' && job?.step === key;
+                const isDone =
+                  job?.step &&
+                  Object.keys(STEP_LABELS).indexOf(key) < Object.keys(STEP_LABELS).indexOf(job.step) &&
+                  job?.status !== 'failed';
+                return (
+                  <View key={key} style={styles.progressStepRow}>
+                    <View
+                      style={[
+                        styles.progressStepDot,
+                        isDone && styles.progressStepDotDone,
+                        isActive && styles.progressStepDotActive,
+                      ]}
+                    />
+                    <Text style={[styles.progressStepText, isActive && styles.progressStepTextActive]}>
+                      {label}
+                    </Text>
+                    {isActive && <ActivityIndicator size="small" color="#2D7F83" />}
+                    {isDone && <Ionicons name="checkmark-circle" size={18} color="#10b981" />}
+                  </View>
+                );
+              })}
+            </View>
+
+            <View style={styles.progressModalFooter}>
+              <Text style={styles.progressModalFooterText}>{job?.message || creationProgress || ''}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -678,6 +731,93 @@ const styles = StyleSheet.create({
   actionSection: {
     marginTop: 32,
     gap: 12,
+  },
+  progressOverlayContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 50,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressOverlayCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  progressModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  progressModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  progressModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  progressModalClose: {
+    padding: 6,
+  },
+  progressModalSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  progressStepList: {
+    gap: 10,
+    marginBottom: 10,
+  },
+  progressStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  progressStepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#D1D5DB',
+  },
+  progressStepDotActive: {
+    backgroundColor: '#2D7F83',
+  },
+  progressStepDotDone: {
+    backgroundColor: '#10b981',
+  },
+  progressStepText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#374151',
+  },
+  progressStepTextActive: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+  progressModalFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  progressModalFooterText: {
+    fontSize: 12,
+    color: '#6B7280',
   },
   progressContainer: {
     flexDirection: 'row',

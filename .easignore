@@ -1,0 +1,65 @@
+# EAS Build ignore file
+# Files and directories listed here will be excluded from the build
+
+# Backend temporary files and cache
+backend/tmp/
+backend/log/
+backend/.bundle/
+backend/vendor/bundle/
+backend/node_modules/
+
+# Backend specific files
+backend/.env
+backend/.env.local
+backend/.env.*.local
+backend/storage/
+backend/public/uploads/
+backend/public/packs/
+backend/public/assets/
+
+# Rails cache
+backend/tmp/cache/
+backend/tmp/pids/
+backend/tmp/sockets/
+
+# Node modules (already in root .gitignore but explicit here)
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+.nyc_output/
+
+# Documentation
+*.md
+!README.md
+
+# OpenSpec (development docs)
+openspec/
+

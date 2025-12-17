@@ -61,6 +61,7 @@ const CoursePracticeScreen = ({ route, navigation }) => {
   const [showTranslation, setShowTranslation] = useState(false);
   const [translation, setTranslation] = useState(null);
   const [translating, setTranslating] = useState(false);
+  const [translationCache, setTranslationCache] = useState(() => ({})); // { [sentenceId]: string }
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -204,11 +205,13 @@ const CoursePracticeScreen = ({ route, navigation }) => {
 
     setShowTranslation(true);
 
-    if (translation) {
+    if (!activeSentence || !activeSentence.sentence) {
       return;
     }
 
-    if (!activeSentence || !activeSentence.sentence) {
+    const cached = translationCache[activeSentence.id];
+    if (cached) {
+      setTranslation(cached);
       return;
     }
 
@@ -220,6 +223,7 @@ const CoursePracticeScreen = ({ route, navigation }) => {
 
       if (result.success) {
         setTranslation(result.translatedText);
+        setTranslationCache(prev => ({ ...prev, [activeSentence.id]: result.translatedText }));
       } else {
         setTranslation('Çeviri başarısız oldu.');
       }
@@ -231,6 +235,38 @@ const CoursePracticeScreen = ({ route, navigation }) => {
   };
 
   const activeSentence = sentences[currentIndex];
+
+  // Per-sentence completion state (optimistic + best-effort hydrate from backend)
+  const [completedSentenceIds, setCompletedSentenceIds] = useState(() => new Set());
+
+  useEffect(() => {
+    const effectiveCourseId = courseId || course?.id;
+    if (!token || !effectiveCourseId || !topic) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await userCourseProgressAPI.getAll(token, {
+          course_id: effectiveCourseId,
+          topic,
+        });
+        if (cancelled) return;
+        const completed = Array.isArray(items)
+          ? items
+              .filter((p) => p?.completed)
+              .map((p) => p.practice_sentence_id || p.sentence_id)
+              .filter(Boolean)
+          : [];
+        setCompletedSentenceIds(new Set(completed));
+      } catch (e) {
+        // Non-blocking: keep optimistic-only state if backend fetch fails
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, courseId, course?.id, topic]);
 
   const handleNext = () => {
     setModalVisible(false);
@@ -259,6 +295,13 @@ const CoursePracticeScreen = ({ route, navigation }) => {
     }
   };
 
+  // When the active sentence changes, restore cached translation if present
+  useEffect(() => {
+    if (!activeSentence?.id) return;
+    const cached = translationCache[activeSentence.id];
+    setTranslation(cached || null);
+  }, [activeSentence?.id]);
+
   const resetState = async () => {
     stopAudio();
     setIsPlayingRef(false);
@@ -276,7 +319,7 @@ const CoursePracticeScreen = ({ route, navigation }) => {
       }
     }
     setIsVideoPlaying(false);
-    setTranslation(null);
+    // Do NOT clear translation here; it causes "Çeviri yükleniyor..." after modal interactions
   };
 
   const toggleRecording = async () => {
@@ -499,6 +542,15 @@ const CoursePracticeScreen = ({ route, navigation }) => {
 
     const isCompleted = score >= 85;
 
+    // Optimistic per-sentence completion indicator (instant UI feedback)
+    if (isCompleted && activeSentence?.id) {
+      setCompletedSentenceIds((prev) => {
+        const next = new Set(prev);
+        next.add(activeSentence.id);
+        return next;
+      });
+    }
+
     // Optimistic update: immediately update progress if sentence is completed
     if (isCompleted && topic && topicProgressData?.topic_progress) {
       const topicData = topicProgressData.topic_progress.find(
@@ -583,6 +635,8 @@ const CoursePracticeScreen = ({ route, navigation }) => {
           if (videoRef.current) {
             try {
               await videoRef.current.stopAsync();
+              // Double-enforce silence
+              await videoRef.current.setStatusAsync({ shouldPlay: false, isMuted: true, volume: 0.0 });
             } catch (err) { }
           }
           setIsVideoPlaying(false);
@@ -593,8 +647,14 @@ const CoursePracticeScreen = ({ route, navigation }) => {
           setIsVideoPlaying(true);
           if (videoRef.current) {
             try {
-              await videoRef.current.setPositionAsync(0);
-              await videoRef.current.playAsync();
+              // Enforce "visual-only": always muted + volume 0 before playing
+              await videoRef.current.setStatusAsync({
+                positionMillis: 0,
+                shouldPlay: true,
+                isMuted: true,
+                volume: 0.0,
+                isLooping: true,
+              });
             } catch (err) { }
           }
         }
@@ -611,6 +671,7 @@ const CoursePracticeScreen = ({ route, navigation }) => {
       if (videoRef.current) {
         try {
           await videoRef.current.stopAsync();
+          await videoRef.current.setStatusAsync({ shouldPlay: false, isMuted: true, volume: 0.0 });
         } catch (err) { }
       }
       setIsVideoPlaying(false);
@@ -741,6 +802,7 @@ const CoursePracticeScreen = ({ route, navigation }) => {
                 resizeMode="cover"
                 isLooping={true}
                 isMuted={true}
+                volume={0.0}
                 shouldPlay={false}
               />
             </Animated.View>
@@ -785,6 +847,14 @@ const CoursePracticeScreen = ({ route, navigation }) => {
           </TouchableOpacity>
 
           <View style={styles.sentenceCard}>
+            {/* Completion indicator (top-right) */}
+            <View style={styles.sentenceStatusBadge}>
+              {completedSentenceIds.has(activeSentence?.id) ? (
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+              ) : (
+                <Ionicons name="ellipse-outline" size={20} color="#9CA3AF" />
+              )}
+            </View>
             <View style={styles.sentenceContent}>
               <ScrollView
                 contentContainerStyle={styles.sentenceScrollContent}
@@ -1184,6 +1254,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start', // Align content to top
     minHeight: 100,
     marginBottom: 'auto', // Push to top
+  },
+  sentenceStatusBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 2,
   },
   sentenceContent: {
     width: '100%',

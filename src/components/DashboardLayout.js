@@ -1,9 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, ScrollView, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
 import { COLORS, SIZES } from '../constants';
-import { useNotifications } from '../context/NotificationContext';
+import NotificationSystem from './NotificationSystem';
 
 const modes = [
   { id: 'sualingo', name: 'Sualingo Mode', icon: 'language' },
@@ -14,9 +13,6 @@ const modes = [
 
 const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigation, hideHeader = false, showBackButton = false }) => {
   const [modeModalVisible, setModeModalVisible] = useState(false);
-  const [notificationModalVisible, setNotificationModalVisible] = useState(false);
-  const swipeableRefs = useRef({});
-  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAll } = useNotifications();
 
   const currentModeData = modes.find(m => m.id === currentMode) || modes[0];
 
@@ -42,79 +38,46 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
     }
   };
 
-  const handleNotifications = () => {
-    setNotificationModalVisible(true);
-  };
-
-  const handleNotificationPress = (notification) => {
-    // Mark as read
-    markAsRead(notification.id);
-
-    // Close modal
-    setNotificationModalVisible(false);
-
-    // Navigate based on notification type
-    if (notification.type === 'video_ready' && notification.videoData) {
-      navigation.navigate('VideoViewing', { video: notification.videoData });
-    }
-  };
-
-  const formatTimeAgo = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
-
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return `${Math.floor(seconds / 86400)}d ago`;
-  };
-
   return (
     <View style={styles.container}>
       {/* Fixed Header */}
       {!hideHeader && (
         <View style={styles.header}>
-          {showBackButton ? (
+          {/* Left: Back Button */}
+          <View style={styles.headerLeft}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => navigation.navigate('Dashboard')}
+              onPress={() => navigation ? navigation.navigate('Dashboard') : null}
             >
               <Ionicons name="arrow-back" size={24} color="#1F2937" />
             </TouchableOpacity>
-          ) : (
+          </View>
+
+          {/* Center: Mode Selector */}
+          <View style={styles.headerCenter}>
             <TouchableOpacity
-              style={styles.notificationButton}
-              onPress={handleNotifications}
+              style={styles.modeSelector}
+              onPress={() => setModeModalVisible(true)}
             >
-              <Ionicons name="notifications-outline" size={24} color="#1F2937" />
-              {unreadCount > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.modePill}>
+                <Ionicons name={currentModeData.icon} size={18} color={COLORS.primary} />
+                <Text style={styles.modeText}>{currentModeData.name}</Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color={COLORS.gray[600]} />
             </TouchableOpacity>
-          )}
+          </View>
 
-          <TouchableOpacity
-            style={styles.modeSelector}
-            onPress={() => setModeModalVisible(true)}
-          >
-            <View style={styles.modePill}>
-              <Ionicons name={currentModeData.icon} size={18} color={COLORS.primary} />
-              <Text style={styles.modeText}>{currentModeData.name}</Text>
-            </View>
-            <Ionicons name="chevron-down" size={20} color={COLORS.gray[600]} />
-          </TouchableOpacity>
+          {/* Right: Notifications & Profile */}
+          <View style={styles.headerRight}>
+            <NotificationSystem navigation={navigation} />
 
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Ionicons name="person-circle-outline" size={28} color="#2D7F83" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              <Ionicons name="person-circle-outline" size={28} color="#2D7F83" />
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -169,136 +132,6 @@ const DashboardLayout = ({ children, currentMode = 'tts', onModeChange, navigati
           </View>
         </View>
       </Modal>
-
-      {/* Notifications Modal */}
-      <Modal
-        visible={notificationModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setNotificationModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, styles.notificationModal]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Notifications</Text>
-              <View style={styles.headerActions}>
-                {notifications.length > 0 && (
-                  <>
-                    {unreadCount > 0 && (
-                      <TouchableOpacity
-                        onPress={markAllAsRead}
-                        style={styles.markAllButton}
-                      >
-                        <Ionicons name="checkmark-done" size={18} color={COLORS.primary} />
-                        <Text style={styles.markAllText}>Mark all</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      onPress={async () => {
-                        if (notifications.length > 0) {
-                          await clearAll();
-                        }
-                      }}
-                      style={[styles.markAllButton, styles.clearAllButton]}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                      <Text style={[styles.markAllText, styles.clearAllText]}>Clear all</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-                <TouchableOpacity onPress={() => setNotificationModalVisible(false)}>
-                  <Ionicons name="close" size={24} color={COLORS.textLight} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {notifications.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="notifications-off-outline" size={64} color={COLORS.gray[600]} />
-                <Text style={styles.emptyText}>No notifications</Text>
-                <Text style={styles.emptySubText}>You're all caught up!</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.notificationList}>
-                {notifications.map((notification) => (
-                  <Swipeable
-                    key={notification.id}
-                    ref={ref => swipeableRefs.current[notification.id] = ref}
-                    renderRightActions={(progress, dragX) => (
-                      <View style={styles.swipeDeleteContainer}>
-                        <Animated.View
-                          style={[
-                            styles.deleteButton,
-                            {
-                              transform: [{
-                                translateX: dragX.interpolate({
-                                  inputRange: [-100, 0],
-                                  outputRange: [0, 100],
-                                  extrapolate: 'clamp',
-                                }),
-                              }],
-                            },
-                          ]}
-                        >
-                          <Ionicons name="trash-outline" size={24} color={COLORS.white} />
-                          <Text style={styles.deleteButtonText}>Delete</Text>
-                        </Animated.View>
-                      </View>
-                    )}
-                    onSwipeableOpen={() => {
-                      deleteNotification(notification.id);
-                      // Close swipeable after deletion
-                      setTimeout(() => {
-                        swipeableRefs.current[notification.id]?.close();
-                      }, 100);
-                    }}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.notificationItem,
-                        !notification.read && styles.notificationItemUnread,
-                      ]}
-                      onPress={() => handleNotificationPress(notification)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[
-                        styles.notificationIcon,
-                        !notification.read && styles.notificationIconUnread,
-                      ]}>
-                        <Ionicons
-                          name={notification.type === 'video_ready' ? 'videocam' : 'information-circle'}
-                          size={24}
-                          color={!notification.read ? COLORS.primary : COLORS.gray[500]}
-                        />
-                      </View>
-                      <View style={styles.notificationContent}>
-                        <Text style={[
-                          styles.notificationTitle,
-                          !notification.read && styles.notificationTitleUnread,
-                        ]}>
-                          {notification.title}
-                        </Text>
-                        <Text style={[
-                          styles.notificationMessage,
-                          !notification.read && styles.notificationMessageUnread,
-                        ]}>
-                          {notification.message}
-                        </Text>
-                        <Text style={styles.notificationTime}>
-                          {formatTimeAgo(notification.createdAt)}
-                        </Text>
-                      </View>
-                      {!notification.read && (
-                        <View style={styles.unreadDot} />
-                      )}
-                    </TouchableOpacity>
-                  </Swipeable>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -315,16 +148,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingTop: 48,
     paddingBottom: 12,
-    backgroundColor: '#F9FAFB', // Match Dashboard Background
+    backgroundColor: '#F9FAFB',
     borderBottomWidth: 0,
   },
-  notificationButton: {
-    width: 40,
-    height: 40,
+  headerLeft: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  headerCenter: {
+    flex: 2,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    // Removed transparent background to fix touch artifact issues
+  },
+  headerRight: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 12,
   },
   backButton: {
     width: 40,
@@ -332,25 +172,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 20,
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#F9FAFB',
-  },
-  notificationBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    marginLeft: -8, // Align with padding
   },
   modeSelector: {
     flexDirection: 'row',
@@ -396,12 +218,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
-    // overflow: 'hidden', // Removing overflow hidden to allow shadow
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -409,7 +232,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 0,
-    // borderBottomColor removed
   },
   modalTitle: {
     fontSize: SIZES.h3,
@@ -441,130 +263,6 @@ const styles = StyleSheet.create({
   modeItemTextSelected: {
     fontWeight: '600',
     color: COLORS.primary,
-  },
-  // Notification Modal Styles
-  notificationModal: {
-    maxHeight: '80%',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  markAllButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  markAllText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  clearAllButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  clearAllText: {
-    color: '#EF4444',
-  },
-  swipeDeleteContainer: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingRight: 20,
-  },
-  deleteButton: {
-    backgroundColor: '#EF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    height: '100%',
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-    paddingHorizontal: 10,
-  },
-  deleteButtonText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  notificationList: {
-    maxHeight: 500,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: SIZES.h4,
-    fontWeight: '600',
-    color: COLORS.textLight,
-  },
-  emptySubText: {
-    fontSize: SIZES.body2,
-    color: COLORS.gray[500],
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 16,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[800],
-    backgroundColor: 'transparent',
-  },
-  notificationItemUnread: {
-    backgroundColor: 'rgba(19, 127, 236, 0.05)',
-  },
-  notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationIconUnread: {
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
-  },
-  notificationContent: {
-    flex: 1,
-    gap: 4,
-  },
-  notificationTitle: {
-    fontSize: SIZES.body2,
-    fontWeight: '500',
-    color: COLORS.gray[400],
-  },
-  notificationTitleUnread: {
-    fontWeight: '700',
-    color: COLORS.textLight,
-  },
-  notificationMessage: {
-    fontSize: SIZES.body3,
-    color: COLORS.gray[500],
-    lineHeight: 20,
-  },
-  notificationMessageUnread: {
-    color: COLORS.gray[300],
-  },
-  notificationTime: {
-    fontSize: SIZES.body4,
-    color: COLORS.gray[600],
-    marginTop: 4,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
-    marginTop: 6,
   },
 });
 

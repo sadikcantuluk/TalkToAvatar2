@@ -488,7 +488,7 @@ const TextToSpeechScreen = ({ navigation, route }) => {
     console.log('- audioUri:', currentAudioUri ? 'Available' : 'None');
 
     navigation.navigate('SelectAvatar', {
-      returnScreen: 'Dashboard',
+      returnScreen: 'TextToSpeech',
       preserveState: true // Indicate state should be preserved
     });
   };

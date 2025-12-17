@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 
 const CACHE_KEY_PREFIX = '@gemini_avatar_cache_';
 const CACHE_METADATA_KEY = '@gemini_cache_metadata';
 const MAX_CACHE_SIZE = 50; // Maximum number of cached items
 const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const LARGE_VALUE_THRESHOLD = 300_000; // ~300KB JSON threshold for AsyncStorage/CursorWindow safety
 
 /**
  * Image Cache for Gemini API responses
@@ -18,15 +20,13 @@ class ImageCache {
    * @returns {string} Cache key
    */
   generateCacheKey(imageBase64, prompt = '') {
-    // Use first 200 chars of base64 + timestamp for key
-    // This creates a unique but manageable key
-    const imageHash = imageBase64.substring(0, 200);
-    const timestamp = Date.now().toString(36); // Base36 for shorter string
-    const combined = imageHash + prompt + timestamp;
+    // Stable key: hash of inputs (no timestamp). This allows actual cache hits.
+    const imageHash = imageBase64.substring(0, 300);
+    const combined = imageHash + '::' + (prompt || '');
     
     // Simple hash function with limited length
     let hash = 0;
-    const maxLength = 50; // Limit key length
+    const maxLength = 200; // Limit input length for hashing
     for (let i = 0; i < Math.min(combined.length, maxLength); i++) {
       const char = combined.charCodeAt(i);
       hash = ((hash << 3) - hash) + char;
@@ -34,6 +34,23 @@ class ImageCache {
     }
     
     return `${CACHE_KEY_PREFIX}${Math.abs(hash).toString(36)}`; // Base36 for shorter key
+  }
+
+  async _writeLargeResultToFile(cacheKey, result) {
+    const dir = `${FileSystem.cacheDirectory}gemini-avatar-cache/`;
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => null);
+    const fileUri = `${dir}${cacheKey.replace(CACHE_KEY_PREFIX, '')}.json`;
+    await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(result), {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    return fileUri;
+  }
+
+  async _readLargeResultFromFile(fileUri) {
+    const raw = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    return JSON.parse(raw);
   }
 
   /**
@@ -68,9 +85,24 @@ class ImageCache {
       // Update access time in metadata
       await this.updateAccessTime(cacheKey);
       
+      // Support large results stored in FileSystem
+      if (data.resultFileUri) {
+        try {
+          return await this._readLargeResultFromFile(data.resultFileUri);
+        } catch (e) {
+          console.warn('⚠️ [Cache] Failed to read cached file, treating as miss:', e?.message || e);
+          await this.remove(cacheKey);
+          return null;
+        }
+      }
+
       return data.result;
     } catch (error) {
       console.error('❌ [Cache] Error getting from cache:', error);
+      // Android CursorWindow "Row too big" should be treated as cache miss
+      if (String(error?.message || '').includes('CursorWindow')) {
+        return null;
+      }
       return null;
     }
   }
@@ -86,12 +118,20 @@ class ImageCache {
       const cacheKey = this.generateCacheKey(imageBase64, prompt);
       console.log(`💾 [Cache] Saving to cache: ${cacheKey.substring(0, 50)}...`);
       
-      const data = {
+      const base = {
         timestamp: Date.now(),
-        result,
         imageHashLength: imageBase64.length,
         prompt: prompt.substring(0, 100), // Store first 100 chars for reference
       };
+
+      const resultJson = JSON.stringify(result);
+      let data = { ...base, result };
+
+      // If too large, store result in FileSystem and keep only URI in AsyncStorage
+      if (resultJson.length > LARGE_VALUE_THRESHOLD) {
+        const fileUri = await this._writeLargeResultToFile(cacheKey, result);
+        data = { ...base, resultFileUri: fileUri, resultSize: resultJson.length };
+      }
 
       await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
       console.log('✅ [Cache] Successfully cached result');
@@ -106,6 +146,9 @@ class ImageCache {
       if (error.message && error.message.includes('database or disk is full')) {
         console.warn('⚠️ [Cache] Storage full, clearing old cache entries...');
         await this.clearAll();
+      } else if (String(error?.message || '').includes('CursorWindow')) {
+        // Treat as non-fatal; cache is best-effort
+        console.warn('⚠️ [Cache] CursorWindow row-too-big, skipping cache write');
       } else {
         console.error('❌ [Cache] Error saving to cache:', error);
       }

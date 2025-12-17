@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES } from '../constants/theme';
 import { useAuth } from '../context';
+import { NotificationSystem } from '../components';
 
 const THEME = {
     primary: '#2D7F83',
@@ -70,17 +71,20 @@ const DashboardScreen = ({ navigation }) => {
                     <Text style={styles.greeting}>Hello,</Text>
                     <Text style={styles.username}>{user?.username || 'User'}</Text>
                 </View>
-                <TouchableOpacity
-                    style={styles.profileButton}
-                    onPress={() => navigation.navigate('Profile')}
-                >
-                    {/* Placeholder Avatar */}
-                    <View style={styles.avatarPlaceholder}>
-                        <Text style={styles.avatarText}>
-                            {user?.username ? user.username.charAt(0).toUpperCase() : 'U'}
-                        </Text>
-                    </View>
-                </TouchableOpacity>
+                <View style={styles.headerRight}>
+                    <NotificationSystem navigation={navigation} />
+                    <TouchableOpacity
+                        style={styles.profileButton}
+                        onPress={() => navigation.navigate('Profile')}
+                    >
+                        {/* Placeholder Avatar */}
+                        <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>
+                                {user?.username ? user.username.charAt(0).toUpperCase() : 'U'}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <ScrollView
@@ -139,7 +143,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 24,
         paddingVertical: 20,
-        marginTop: Platform.OS === 'android' ? 30 : 10, // Added padding for Android status bar
+        marginTop: Platform.OS === 'android' ? 30 : 10,
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
     },
     greeting: {
         fontSize: 16,

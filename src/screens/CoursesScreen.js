@@ -441,12 +441,7 @@ const CoursesScreen = ({ navigation }) => {
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
-          </TouchableOpacity>
+
           <Text style={styles.headerTitle}>My Courses</Text>
           <TouchableOpacity
             style={styles.addButton}

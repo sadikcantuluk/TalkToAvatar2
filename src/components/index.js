@@ -1,29 +1,22 @@
-export { default as Button } from './Button';
-export { default as Input } from './Input';
-export { default as Header } from './Header';
-export { default as AvatarCard } from './AvatarCard';
-export { default as LoadingDots } from './LoadingDots';
-export { default as DashboardLayout } from './DashboardLayout';
-export { default as LanguageSelector } from './LanguageSelector';
-export { default as VoiceSelector } from './VoiceSelector';
-export { default as Toast } from './Toast';
-export { default as ConfirmDialog } from './ConfirmDialog';
-export { default as ValidationMessage } from './ValidationMessage';
-export { default as Skeleton } from './Skeleton';
-export { 
-  VideoCardSkeleton, 
-  AudioCardSkeleton, 
-  RecordingCardSkeleton, 
-  CourseCardSkeleton,
-  AvatarGridItemSkeleton,
-  OverviewSkeleton,
-  SubjectsSkeleton,
-  RecordingsSkeleton,
-  ReportsSkeleton,
-  AnalysisSkeleton,
-  SkeletonList 
-} from './SkeletonComponents';
-export { default as PronunciationResult } from './PronunciationResult';
-export { default as CourseProgressCard } from './CourseProgressCard';
-export { default as ProgressBar, getProgressColor } from './ProgressBar';
+import Button from './Button';
+import Input from './Input';
+import Header from './Header';
+import DashboardLayout from './DashboardLayout';
+import LanguageSelector from './LanguageSelector';
+import VoiceSelector from './VoiceSelector';
+import ConfirmDialog from './ConfirmDialog';
+import { CourseCardSkeleton, SkeletonList } from './SkeletonComponents';
+import NotificationSystem from './NotificationSystem';
 
+export {
+  Button,
+  Input,
+  Header,
+  DashboardLayout,
+  LanguageSelector,
+  VoiceSelector,
+  ConfirmDialog,
+  CourseCardSkeleton,
+  SkeletonList,
+  NotificationSystem
+};

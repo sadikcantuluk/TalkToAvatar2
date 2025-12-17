@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,8 @@ const SelectAvatarScreen = ({ navigation, route }) => {
   const { token, user } = useAuth();
   const [selectedAvatar, setSelectedAvatar] = useState('yusuf');
   const { data: customAvatars, loading: isLoading, setData: setCustomAvatars, refresh: refreshAvatars } = useUserData('customAvatars');
+  const insets = useSafeAreaInsets();
+  const returnScreenRef = React.useRef(route?.params?.returnScreen || 'Dashboard');
 
   const getCustomAvatarsKey = () => {
     return getUserStorageKey('@custom_avatars', user?.id);
@@ -121,7 +124,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
   const handleContinue = () => {
     // Navigate back to the screen that called us, or Dashboard if none
     const avatar = allAvatars.find(a => a.id === selectedAvatar);
-    const returnScreen = route.params?.returnScreen || 'Dashboard';
+    const returnScreen = returnScreenRef.current || route.params?.returnScreen || 'Dashboard';
 
     if (navigation.canGoBack()) {
       navigation.navigate(returnScreen, { selectedAvatar: avatar });
@@ -131,7 +134,9 @@ const SelectAvatarScreen = ({ navigation, route }) => {
   };
 
   const handleCreateCustom = () => {
-    navigation.navigate('CreateCustomAvatar');
+    navigation.navigate('CreateCustomAvatar', {
+      returnScreen: returnScreenRef.current || route.params?.returnScreen || 'Dashboard',
+    });
   };
 
   const handleDeleteAvatar = async (avatarId) => {
@@ -305,7 +310,7 @@ const SelectAvatarScreen = ({ navigation, route }) => {
       </ScrollView>
 
       {/* Continue Button */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Button
           title="Continue"
           onPress={handleContinue}

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -19,9 +20,11 @@ import { useAuth, useToast } from '../context';
 import customAvatarsAPI from '../services/customAvatarsAPI';
 import { compressImageForAPI } from '../utils/imageCompression';
 
-const CreateCustomAvatarScreen = ({ navigation }) => {
+const CreateCustomAvatarScreen = ({ navigation, route }) => {
   const { token, user } = useAuth();
   const { error: showError, warning, info, success } = useToast();
+  const insets = useSafeAreaInsets();
+  const returnScreen = route?.params?.returnScreen;
 
   const [step, setStep] = useState('create'); // 'create', 'loading', 'confirmation'
   const [selectedImage, setSelectedImage] = useState(null);
@@ -194,6 +197,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
           // Navigate back to Select Avatar with new custom avatar
           navigation.navigate('SelectAvatar', {
             customAvatar: newAvatar,
+            ...(returnScreen ? { returnScreen } : {}),
           });
         } catch (backendError) {
           console.error('⚠️ Backend save failed, saving locally only:', backendError);
@@ -207,6 +211,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
           // Navigate back to Select Avatar with new custom avatar
           navigation.navigate('SelectAvatar', {
             customAvatar: newAvatar,
+            ...(returnScreen ? { returnScreen } : {}),
           });
         }
       } else {
@@ -219,6 +224,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
         // Navigate back to Select Avatar with new custom avatar
         navigation.navigate('SelectAvatar', {
           customAvatar: newAvatar,
+          ...(returnScreen ? { returnScreen } : {}),
         });
       }
     } catch (error) {
@@ -339,7 +345,7 @@ const CreateCustomAvatarScreen = ({ navigation }) => {
       </View>
 
       {/* Action Buttons */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Button
           title="Accept and Continue"
           onPress={handleAccept}
